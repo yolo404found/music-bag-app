@@ -13,7 +13,22 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "backgroundModes": ["audio", "background-fetch", "background-processing"],
+      "infoPlist": {
+        "UIBackgroundModes": ["audio", "background-fetch", "background-processing"],
+        "NSMicrophoneUsageDescription": "This app needs access to microphone for audio playback",
+        "AVAudioSessionCategory": "playback",
+        "AVAudioSessionCategoryOptions": ["allowBluetooth", "allowBluetoothA2DP", "mixWithOthers"],
+        "AVAudioSessionMode": "default",
+        "AVAudioSessionCategoryPlayback": true,
+        "AVAudioSessionCategoryPlayAndRecord": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        },
+        "NSAppleMusicUsageDescription": "This app needs access to music library for audio playback",
+        "NSMediaLibraryUsageDescription": "This app needs access to media library for audio playback"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -21,7 +36,25 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "WAKE_LOCK",
+        "android.permission.WAKE_LOCK",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.ACCESS_NOTIFICATION_POLICY",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "intentFilters": [
+        {
+          "action": "android.intent.action.MEDIA_BUTTON",
+          "category": "android.intent.category.DEFAULT"
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
