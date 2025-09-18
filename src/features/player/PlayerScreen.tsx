@@ -46,7 +46,8 @@ const PlayerScreen: React.FC = () => {
     pauseAudio: globalPauseAudio,
     resumeAudio: globalResumeAudio,
     stopAudio: globalStopAudio,
-    seekTo: globalSeekTo
+    seekTo: globalSeekTo,
+    setCurrentAudio: setGlobalCurrentAudio
   } = useAudio();
   
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -61,6 +62,7 @@ const PlayerScreen: React.FC = () => {
   const [isSeekInProgress, setIsSeekInProgress] = useState(false);
   const [playlist, setPlaylist] = useState<DownloadedAudio[]>([]);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [currentAudio, setCurrentAudio] = useState<DownloadedAudio>(audio);
 
   const positionUpdateInterval = useRef<NodeJS.Timeout | null>(null);
   const seekTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,6 +97,21 @@ const PlayerScreen: React.FC = () => {
       disabled: !globalSound || isLoading || globalIsBuffering
     });
   }, [sound, globalSound, isLoading, globalIsBuffering, globalIsPlaying]);
+
+  // Sync local currentAudio with global currentAudio changes
+  useEffect(() => {
+    if (globalCurrentAudio && globalCurrentAudio.id !== currentAudio.id) {
+      console.log('🎵 Global audio changed, updating local state');
+      setCurrentAudio(globalCurrentAudio);
+      setIsFavorite(globalCurrentAudio.favorite);
+      
+      // Update current track index
+      const newIndex = playlist.findIndex(a => a.id === globalCurrentAudio.id);
+      if (newIndex >= 0) {
+        setCurrentTrackIndex(newIndex);
+      }
+    }
+  }, [globalCurrentAudio, currentAudio.id, playlist]);
 
   // Initialize visualization bars
   const initializeVisualization = (): void => {
@@ -180,14 +197,35 @@ const PlayerScreen: React.FC = () => {
     setPlaylist(allAudios);
     
     // Find current track index
-    const currentIndex = allAudios.findIndex(a => a.id === audio.id);
+    const currentIndex = allAudios.findIndex(a => a.id === currentAudio.id);
     setCurrentTrackIndex(currentIndex >= 0 ? currentIndex : 0);
+  };
+
+  // Change current audio and update UI
+  const changeCurrentAudio = async (newAudio: DownloadedAudio): Promise<void> => {
+    try {
+      console.log('🎵 Changing current audio to:', newAudio.title);
+      
+      // Update local state
+      setCurrentAudio(newAudio);
+      setIsFavorite(newAudio.favorite);
+      
+      // Update global audio state
+      setGlobalCurrentAudio(newAudio);
+      
+      // Play the new audio
+      await globalPlayAudio(newAudio);
+      
+      console.log('🎵 Audio changed successfully');
+    } catch (error) {
+      console.error('🎵 Error changing audio:', error);
+    }
   };
 
   // Load saved position
   const loadSavedPosition = async (): Promise<void> => {
     try {
-      const savedPosition = await storageService.getPlayerPosition(audio.id);
+      const savedPosition = await storageService.getPlayerPosition(currentAudio.id);
       // Position will be managed by global audio context
       console.log('🎵 Loaded saved position:', savedPosition);
     } catch (error) {
@@ -200,12 +238,12 @@ const PlayerScreen: React.FC = () => {
     try {
       console.log('🎵 Starting audio load process...');
       setIsLoading(true);
-      console.log('🎵 Loading audio from:', audio.localUri);
+      console.log('🎵 Loading audio from:', currentAudio.localUri);
       console.log('🎵 Audio metadata:', {
-        id: audio.id,
-        title: audio.title,
-        duration: audio.duration,
-        fileSize: audio.fileSize
+        id: currentAudio.id,
+        title: currentAudio.title,
+        duration: currentAudio.duration,
+        fileSize: currentAudio.fileSize
       });
       
       // Configure audio session for playback
@@ -228,7 +266,7 @@ const PlayerScreen: React.FC = () => {
 
       // Check if file exists
       console.log('🎵 Checking if audio file exists...');
-      const fileInfo = await FileSystem.getInfoAsync(audio.localUri);
+      const fileInfo = await FileSystem.getInfoAsync(currentAudio.localUri);
       console.log('🎵 File info:', {
         exists: fileInfo.exists,
         size: 'size' in fileInfo ? fileInfo.size : 'unknown',
@@ -237,7 +275,7 @@ const PlayerScreen: React.FC = () => {
       });
 
       if (!fileInfo.exists) {
-        throw new Error(`Audio file does not exist at: ${audio.localUri}`);
+        throw new Error(`Audio file does not exist at: ${currentAudio.localUri}`);
       }
 
       if ('size' in fileInfo && fileInfo.size === 0) {
@@ -249,7 +287,7 @@ const PlayerScreen: React.FC = () => {
       // Load new sound
       console.log('🎵 Creating Audio.Sound object...');
       const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: audio.localUri },
+        { uri: currentAudio.localUri },
         { 
           shouldPlay: false, 
           positionMillis: globalPosition * 1000,
@@ -281,7 +319,7 @@ const PlayerScreen: React.FC = () => {
       console.error('🎵 Error details:', {
         message: error instanceof Error ? error.message : 'Unknown error',
         stack: error instanceof Error ? error.stack : undefined,
-        audioUri: audio.localUri
+        audioUri: currentAudio.localUri
       });
       setIsLoading(false);
       Alert.alert('Error', `Failed to load audio file: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -348,7 +386,7 @@ const PlayerScreen: React.FC = () => {
   // Save position
   const savePosition = async (pos: number): Promise<void> => {
     try {
-      await storageService.savePlayerPosition(audio.id, pos);
+      await storageService.savePlayerPosition(currentAudio.id, pos);
     } catch (error) {
       console.error('Error saving position:', error);
     }
@@ -363,7 +401,7 @@ const PlayerScreen: React.FC = () => {
       globalIsBuffering,
       localSound: !!sound,
       globalSound: !!globalSound,
-      audioUri: audio.localUri 
+      audioUri: currentAudio.localUri 
     });
 
     try {
@@ -374,7 +412,7 @@ const PlayerScreen: React.FC = () => {
         console.log('🎵 Audio paused successfully');
       } else {
         console.log('🎵 Playing audio...');
-        await globalPlayAudio(audio);
+        await globalPlayAudio(currentAudio);
         // startVisualization();
         console.log('🎵 Audio play command sent');
       }
@@ -475,8 +513,9 @@ const PlayerScreen: React.FC = () => {
   // Handle favorite toggle
   const handleFavoriteToggle = async (): Promise<void> => {
     try {
-      const updatedAudio = { ...audio, favorite: !isFavorite };
+      const updatedAudio = { ...currentAudio, favorite: !isFavorite };
       await updateDownloadedAudio(updatedAudio);
+      setCurrentAudio(updatedAudio);
       setIsFavorite(!isFavorite);
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -528,7 +567,7 @@ const PlayerScreen: React.FC = () => {
     
     const previousAudio = playlist[newIndex];
     setCurrentTrackIndex(newIndex);
-    navigation.replace('Player', { audio: previousAudio });
+    changeCurrentAudio(previousAudio);
   };
 
   // Handle next track
@@ -542,7 +581,7 @@ const PlayerScreen: React.FC = () => {
     
     const nextAudio = playlist[newIndex];
     setCurrentTrackIndex(newIndex);
-    navigation.replace('Player', { audio: nextAudio });
+    changeCurrentAudio(nextAudio);
   };
 
   // Format time
@@ -628,7 +667,7 @@ const PlayerScreen: React.FC = () => {
         <View style={styles.albumSection}>
           <View style={styles.albumArtContainer}>
             <Image
-              source={{ uri: audio.thumbnail }}
+              source={{ uri: currentAudio.thumbnail }}
               style={styles.albumArt}
               resizeMode="cover"
             />
@@ -646,7 +685,7 @@ const PlayerScreen: React.FC = () => {
         {/* Track Info */}
         <View style={styles.trackInfo}>
           <Text style={styles.trackTitle} numberOfLines={1}>
-            {audio.title}
+            {currentAudio.title}
           </Text>
           <Text style={styles.trackArtist} numberOfLines={1}>
             Unknown Artist
@@ -778,7 +817,7 @@ const PlayerScreen: React.FC = () => {
                 onPress={() => {
                   const newIndex = currentTrackIndex + index + 1;
                   setCurrentTrackIndex(newIndex);
-                  navigation.replace('Player', { audio: item });
+                  changeCurrentAudio(item);
                 }}
               >
                 <View style={styles.upNextItemInfo}>
@@ -867,7 +906,7 @@ const styles = StyleSheet.create({
   },
   albumArt: {
     width: width * 0.85,
-    height: width * 0.85,
+    height: 300, // Fixed height
     borderRadius: 8,
   },
   albumArtOverlay: {

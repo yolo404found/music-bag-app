@@ -110,18 +110,6 @@ const InfoScreen: React.FC = () => {
     }
   };
 
-  // Handle play
-  const handlePlay = (): void => {
-    if (isAlreadyDownloaded) {
-      // Find the downloaded audio
-      const downloadedAudio = appState.downloadedAudios.find(audio => audio.id === metadata.id);
-      if (downloadedAudio) {
-        navigation.navigate('Player', { audio: downloadedAudio });
-      }
-    } else {
-      Alert.alert('Not Downloaded', 'Please download the audio first to play it.');
-    }
-  };
 
   return (
     <View style={styles.container}>
@@ -207,15 +195,6 @@ const InfoScreen: React.FC = () => {
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.playButton]}
-            onPress={handlePlay}
-            disabled={!isAlreadyDownloaded}
-          >
-            <PhosphorIcons.Play size={20} color="#fff" weight="fill" />
-            <Text style={styles.actionButtonText}>Play</Text>
-          </TouchableOpacity>
-
           {metadata.canDownload && (
             <TouchableOpacity
               style={[
@@ -405,8 +384,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4A9EFF',
   },
   actionButtons: {
-    flexDirection: 'row',
-    gap: 15,
     marginBottom: 30,
   },
   actionButton: {

@@ -56,61 +56,13 @@ class DownloadService {
 
       if (!response.success || !response.data) {
         console.error('📥 Download failed:', response.error);
-        console.log('📥 Falling back to mock audio due to download failure');
         
-        // Fallback to mock audio if real download fails
-        const mockAudioData = this.createMockAudioData();
-        const fileUri = await fileSystemService.saveMockAudio(mockAudioData, videoId);
+        // Clean up
+        this.activeDownloads.delete(videoId);
         
-        // Update progress to saving
-        onProgress?.({
-          videoId,
-          progress: 95,
-          status: 'saving',
-        });
-
-        // Verify the mock file was created
-        console.log('📥 Verifying mock file...');
-        const fileInfo = await FileSystem.getInfoAsync(fileUri);
-        console.log('📥 Mock file verification:', {
-          exists: fileInfo.exists,
-          size: fileInfo.size,
-          uri: fileInfo.uri,
-          isDirectory: fileInfo.isDirectory
-        });
-
-        // Create downloaded audio metadata with mock data
-        const downloadedAudio: DownloadedAudio = {
-          id: metadata.id,
-          title: metadata.title,
-          localUri: fileUri,
-          duration: metadata.duration,
-          thumbnail: metadata.thumbnail,
-          createdAt: new Date().toISOString(),
-          position: 0,
-          favorite: false,
-          fileSize: fileInfo.size || 0,
-        };
-
-        console.log('📥 Mock audio metadata:', {
-          id: downloadedAudio.id,
-          title: downloadedAudio.title,
-          duration: downloadedAudio.duration,
-          fileSize: downloadedAudio.fileSize,
-          localUri: downloadedAudio.localUri
-        });
-
-        // Save to storage
-        await storageService.saveDownloadedAudio(downloadedAudio);
-
-        // Update progress to completed
-        onProgress?.({
-          videoId,
-          progress: 100,
-          status: 'completed',
-        });
-
-        return downloadedAudio;
+        // Call error callback instead of falling back to mock
+        onError?.(response.error || 'Download failed');
+        return null;
       }
 
       console.log('📥 Download successful, data:', response.data);
