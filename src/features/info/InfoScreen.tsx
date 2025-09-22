@@ -17,6 +17,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, AudioMetadata, DownloadedAudio } from '../../shared/types';
 import { useApp } from '../../core/providers/AppProvider';
 import { useToast } from '../../core/providers/ToastProvider';
+import { useTheme } from '../../core/providers/ThemeProvider';
 import { apiService } from '../../shared/services/apiService';
 import { fileSystemService } from '../../shared/services/fileSystemService';
 import { downloadService } from '../../shared/services/downloadService';
@@ -34,6 +35,7 @@ const InfoScreen: React.FC = () => {
   
   const { addDownloadedAudio, appState } = useApp();
   const { showSuccess, showError, showInfo, showWarning } = useToast();
+  const { theme, themeMode } = useTheme();
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [isAlreadyDownloaded, setIsAlreadyDownloaded] = useState(false);
@@ -112,20 +114,23 @@ const InfoScreen: React.FC = () => {
 
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar 
+        barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'} 
+        backgroundColor={theme.colors.background} 
+      />
       
       {/* Header */}
       <SafeAreaView style={styles.header}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
           onPress={() => navigation.goBack()}
         >
-          <PhosphorIcons.ArrowLeft size={20} color="#fff" weight="bold" />
+          <PhosphorIcons.ArrowLeft size={20} color={theme.colors.text} weight="bold" />
         </TouchableOpacity>
         
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Audio Info</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Audio Info</Text>
         </View>
         
         <View style={styles.headerRight} />
@@ -148,25 +153,28 @@ const InfoScreen: React.FC = () => {
         </View>
 
         {/* Title */}
-        <Text style={styles.title} numberOfLines={3}>
+        <Text style={[styles.title, { color: theme.colors.text }]} numberOfLines={3}>
           {metadata.title}
         </Text>
 
         {/* Metadata */}
-        <View style={styles.metadataContainer}>
-          <View style={styles.metadataItem}>
-            <Text style={styles.metadataLabel}>Duration</Text>
-            <Text style={styles.metadataValue}>{formatDuration(metadata.duration)}</Text>
+        <View style={[styles.metadataContainer, { 
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border 
+        }]}>
+          <View style={[styles.metadataItem, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.metadataLabel, { color: theme.colors.textSecondary }]}>Duration</Text>
+            <Text style={[styles.metadataValue, { color: theme.colors.text }]}>{formatDuration(metadata.duration)}</Text>
           </View>
           
-          <View style={styles.metadataItem}>
-            <Text style={styles.metadataLabel}>License</Text>
-            <Text style={styles.metadataValue}>{metadata.license}</Text>
+          <View style={[styles.metadataItem, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.metadataLabel, { color: theme.colors.textSecondary }]}>License</Text>
+            <Text style={[styles.metadataValue, { color: theme.colors.text }]}>{metadata.license}</Text>
           </View>
           
           <View style={[styles.metadataItem,{borderBottomWidth:0}]}>
-            <Text style={[styles.metadataLabel,{}]}>Status</Text>
-            <Text style={styles.metadataValue}>
+            <Text style={[styles.metadataLabel, { color: theme.colors.textSecondary }]}>Status</Text>
+            <Text style={[styles.metadataValue, { color: theme.colors.text }]}>
               {isAlreadyDownloaded ? 'Downloaded' : 'Not Downloaded'}
             </Text>
           </View>
@@ -174,8 +182,11 @@ const InfoScreen: React.FC = () => {
 
         {/* Download Status */}
         {!metadata.canDownload && (
-          <View style={styles.warningContainer}>
-            <Text style={styles.warningText}>
+          <View style={[styles.warningContainer, { 
+            backgroundColor: `${theme.colors.warning}15`,
+            borderColor: `${theme.colors.warning}30` 
+          }]}>
+            <Text style={[styles.warningText, { color: theme.colors.warning }]}>
               ⚠️ This audio cannot be downloaded due to licensing restrictions.
             </Text>
           </View>
@@ -183,11 +194,14 @@ const InfoScreen: React.FC = () => {
 
         {/* Download Progress */}
         {isDownloading && (
-          <View style={styles.progressContainer}>
-            <Text style={styles.progressText}>Downloading... {downloadProgress.toFixed(0)}%</Text>
-            <View style={styles.progressBar}>
+          <View style={[styles.progressContainer, { 
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.border 
+          }]}>
+            <Text style={[styles.progressText, { color: theme.colors.text }]}>Downloading... {downloadProgress.toFixed(0)}%</Text>
+            <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
               <View 
-                style={[styles.progressFill, { width: `${downloadProgress}%` }]} 
+                style={[styles.progressFill, { backgroundColor: theme.colors.primary, width: `${downloadProgress}%` }]} 
               />
             </View>
           </View>
@@ -200,18 +214,19 @@ const InfoScreen: React.FC = () => {
               style={[
                 styles.actionButton,
                 styles.downloadButton,
-                (isDownloading || isAlreadyDownloaded) && styles.actionButtonDisabled
+                { backgroundColor: theme.colors.primary },
+                (isDownloading || isAlreadyDownloaded) && [styles.actionButtonDisabled, { backgroundColor: theme.colors.border }]
               ]}
               onPress={handleDownload}
               disabled={isDownloading || isAlreadyDownloaded}
             >
               {isDownloading ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
                 <>
                   <PhosphorIcons.Download 
                     size={20} 
-                    color="#fff" 
+                    color="#FFFFFF" 
                     weight={isAlreadyDownloaded ? "fill" : "regular"} 
                   />
                   <Text style={styles.actionButtonText}>
@@ -224,9 +239,12 @@ const InfoScreen: React.FC = () => {
         </View>
 
         {/* Additional Info */}
-        <View style={styles.additionalInfo}>
-          <Text style={styles.additionalInfoTitle}>About This Audio</Text>
-          <Text style={styles.additionalInfoText}>
+        <View style={[styles.additionalInfo, { 
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border 
+        }]}>
+          <Text style={[styles.additionalInfoTitle, { color: theme.colors.text }]}>About This Audio</Text>
+          <Text style={[styles.additionalInfoText, { color: theme.colors.textSecondary }]}>
             {metadata.isLive 
               ? 'This is a live stream. Download may not be available for live content.'
               : 'This audio can be downloaded and played offline in your library.'
@@ -242,7 +260,7 @@ const InfoScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    // backgroundColor will be set via theme
   },
   header: {
     flexDirection: 'row',
@@ -258,13 +276,13 @@ const styles = StyleSheet.create({
     height: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 16,
   },
   headerCenter: {
     flex: 1,
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 1,
@@ -304,29 +322,26 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   liveText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
   },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#fff',
     marginBottom: 20,
     lineHeight: 32,
   },
   metadataContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
     padding: 15,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
   },
   metadataItem: {
     flexDirection: 'row',
@@ -334,54 +349,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
   },
   metadataLabel: {
     fontSize: 14,
-    color: '#8E8E93',
     fontWeight: '500',
   },
   metadataValue: {
     fontSize: 14,
-    color: '#fff',
     fontWeight: '600',
   },
   warningContainer: {
-    backgroundColor: 'rgba(255, 193, 7, 0.1)',
-    borderColor: 'rgba(255, 193, 7, 0.3)',
     borderWidth: 1,
     borderRadius: 12,
     padding: 15,
     marginBottom: 20,
   },
   warningText: {
-    color: '#FFC107',
     fontSize: 14,
     textAlign: 'center',
+    fontWeight: '500',
   },
   progressContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
     padding: 15,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   progressText: {
     fontSize: 14,
-    color: '#fff',
     textAlign: 'center',
     marginBottom: 10,
   },
   progressBar: {
     height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderRadius: 3,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4A9EFF',
   },
   actionButtons: {
     marginBottom: 30,
@@ -394,42 +399,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   playButton: {
-    // backgroundColor: 'rgba(74, 158, 255, 0.2)',
-    // borderColor: 'rgba(74, 158, 255, 0.5)',
+    // Styling will be set via theme
   },
   downloadButton: {
-    // backgroundColor: 'rgba(74, 158, 255, 0.2)',
-    // borderColor: 'rgba(74, 158, 255, 0.5)',
+    // Styling will be set via theme
   },
   actionButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   actionButtonText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
   },
   additionalInfo: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 12,
     padding: 15,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   additionalInfoTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
     marginBottom: 10,
   },
   additionalInfoText: {
     fontSize: 14,
-    color: '#8E8E93',
     lineHeight: 20,
   },
 });

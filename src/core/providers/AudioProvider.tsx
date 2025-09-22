@@ -11,12 +11,19 @@ interface AudioContextType {
   duration: number;
   isBuffering: boolean;
   sound: Audio.Sound | null;
+  playlist: DownloadedAudio[];
+  currentIndex: number;
+  isAutoPlayEnabled: boolean;
   playAudio: (audio: DownloadedAudio) => Promise<void>;
   pauseAudio: () => Promise<void>;
   resumeAudio: () => Promise<void>;
   stopAudio: () => Promise<void>;
   seekTo: (position: number) => Promise<void>;
   setCurrentAudio: (audio: DownloadedAudio | null) => void;
+  setPlaylist: (playlist: DownloadedAudio[], startIndex?: number) => void;
+  playNext: () => Promise<void>;
+  playPrevious: () => Promise<void>;
+  toggleAutoPlay: () => void;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -39,6 +46,9 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [playlist, setPlaylistState] = useState<DownloadedAudio[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isAutoPlayEnabled, setIsAutoPlayEnabled] = useState(true);
   
   const soundRef = useRef<Audio.Sound | null>(null);
   const positionUpdateInterval = useRef<NodeJS.Timeout | null>(null);
@@ -88,6 +98,12 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
       setDuration(status.durationMillis / 1000);
       setIsPlaying(status.isPlaying);
       setIsBuffering(status.isBuffering);
+      
+      // Check if audio has finished playing
+      if (status.didJustFinish && isAutoPlayEnabled && playlist.length > 0) {
+        console.log('🎵 Audio finished, checking for next track...');
+        playNext();
+      }
     }
   };
 
@@ -253,6 +269,50 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
     }
   };
 
+  // Set playlist
+  const setPlaylist = (newPlaylist: DownloadedAudio[], startIndex: number = 0) => {
+    console.log('🎵 Setting playlist with', newPlaylist.length, 'tracks, starting at index', startIndex);
+    setPlaylistState(newPlaylist);
+    setCurrentIndex(startIndex);
+  };
+
+  // Play next track
+  const playNext = async () => {
+    if (playlist.length === 0) return;
+    
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < playlist.length) {
+      console.log('🎵 Playing next track at index', nextIndex);
+      setCurrentIndex(nextIndex);
+      await playAudio(playlist[nextIndex]);
+    } else {
+      console.log('🎵 Reached end of playlist');
+      // Optionally loop back to beginning
+      // setCurrentIndex(0);
+      // await playAudio(playlist[0]);
+    }
+  };
+
+  // Play previous track
+  const playPrevious = async () => {
+    if (playlist.length === 0) return;
+    
+    const prevIndex = currentIndex - 1;
+    if (prevIndex >= 0) {
+      console.log('🎵 Playing previous track at index', prevIndex);
+      setCurrentIndex(prevIndex);
+      await playAudio(playlist[prevIndex]);
+    } else {
+      console.log('🎵 Already at beginning of playlist');
+    }
+  };
+
+  // Toggle auto-play
+  const toggleAutoPlay = () => {
+    setIsAutoPlayEnabled(!isAutoPlayEnabled);
+    console.log('🎵 Auto-play', !isAutoPlayEnabled ? 'enabled' : 'disabled');
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -271,12 +331,19 @@ export const AudioProvider: React.FC<AudioProviderProps> = ({ children }) => {
     duration,
     isBuffering,
     sound: soundRef.current,
+    playlist,
+    currentIndex,
+    isAutoPlayEnabled,
     playAudio,
     pauseAudio,
     resumeAudio,
     stopAudio,
     seekTo,
     setCurrentAudio,
+    setPlaylist,
+    playNext,
+    playPrevious,
+    toggleAutoPlay,
   };
 
   return (

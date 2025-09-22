@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Dimensions,
   TouchableOpacity,
 } from 'react-native';
+import { useTheme } from './ThemeProvider';
 import * as PhosphorIcons from 'phosphor-react-native';
 
 export interface Toast {
@@ -143,6 +144,7 @@ interface ToastItemProps {
 }
 
 const ToastItem: React.FC<ToastItemProps> = ({ toast, index, onHide }) => {
+  const { theme } = useTheme();
   const translateY = useRef(new Animated.Value(-100)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -182,17 +184,17 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, index, onHide }) => {
     return () => clearTimeout(timer);
   }, [toast.id, toast.duration, translateY, opacity, onHide]);
 
-  const getToastStyle = () => {
+  const getToastBackgroundColor = () => {
     switch (toast.type) {
       case 'success':
-        return styles.successToast;
+        return theme.colors.success;
       case 'error':
-        return styles.errorToast;
+        return theme.colors.error;
       case 'warning':
-        return styles.warningToast;
+        return theme.colors.warning;
       case 'info':
       default:
-        return styles.infoToast;
+        return theme.colors.primary;
     }
   };
 
@@ -214,11 +216,11 @@ const ToastItem: React.FC<ToastItemProps> = ({ toast, index, onHide }) => {
     <Animated.View
       style={[
         styles.toast,
-        getToastStyle(),
         {
+          backgroundColor: getToastBackgroundColor(),
           transform: [{ translateY }],
           opacity,
-          top: 60 + index * 80, // Stack toasts
+          top: 60 + index * 80,
         },
       ]}
     >
@@ -265,18 +267,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
-  },
-  successToast: {
-    backgroundColor: '#4CAF50',
-  },
-  errorToast: {
-    backgroundColor: '#F44336',
-  },
-  warningToast: {
-    backgroundColor: '#FF9800',
-  },
-  infoToast: {
-    backgroundColor: '#4A9EFF',
   },
   toastContent: {
     flexDirection: 'row',

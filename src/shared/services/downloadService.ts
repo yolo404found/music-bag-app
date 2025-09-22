@@ -104,18 +104,19 @@ class DownloadService {
         isDirectory: fileInfo.isDirectory
       });
 
-      // Create downloaded audio metadata
-      const downloadedAudio: DownloadedAudio = {
-        id: metadata.id,
-        title: metadata.title,
-        localUri: fileUri,
-        duration: metadata.duration,
-        thumbnail: metadata.thumbnail,
-        createdAt: new Date().toISOString(),
-        position: 0,
-        favorite: false,
-        fileSize: fileInfo.size || 0,
-      };
+        // Create downloaded audio metadata
+        const downloadedAudio: DownloadedAudio = {
+          id: metadata.id,
+          title: metadata.title,
+          localUri: fileUri,
+          duration: metadata.duration,
+          thumbnail: metadata.thumbnail,
+          createdAt: new Date().toISOString(),
+          position: 0,
+          favorite: false,
+          fileSize: fileInfo.size || 0,
+          folderId: 'downloads_default', // Assign to default Downloads folder
+        };
 
       console.log('📥 Downloaded audio metadata:', {
         id: downloadedAudio.id,

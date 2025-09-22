@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { AudioMetadata, CheckResponse, DownloadResponse, API_ENDPOINTS } from '../types';
+import { AudioMetadata, CheckResponse, DownloadResponse, SearchRequest, SearchResponse, API_ENDPOINTS } from '../types';
 import { APP_CONFIG } from '../config/appConfig';
 
 class ApiService {
@@ -120,6 +120,35 @@ class ApiService {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Download failed',
+      };
+    }
+  }
+
+  // Search for music/audio content
+  async search(query: string, maxResults: number = 10): Promise<SearchResponse> {
+    try {
+      const request: SearchRequest = { query, maxResults };
+      const response: AxiosResponse<any> = await this.client.post(
+        API_ENDPOINTS.SEARCH,
+        request
+      );
+      
+      // Handle nested response format from backend if needed
+      const data = response.data.data || response.data;
+      
+      return {
+        success: data.success || true,
+        results: data.results || [],
+        totalResults: data.totalResults || 0,
+        nextPageToken: data.nextPageToken
+      };
+    } catch (error) {
+      console.error('Error searching:', error);
+      return {
+        success: false,
+        results: [],
+        totalResults: 0,
+        error: error instanceof Error ? error.message : 'Search failed',
       };
     }
   }

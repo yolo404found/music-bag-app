@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,21 +19,51 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList, AudioMetadata } from '../../shared/types';
 import { useApp } from '../../core/providers/AppProvider';
 import { useToast } from '../../core/providers/ToastProvider';
+import { useTheme } from '../../core/providers/ThemeProvider';
 import { apiService } from '../../shared/services/apiService';
 import { urlValidator } from '../../shared/utils/urlValidator';
+import ThemeToggleButton from '../../shared/components/ThemeToggleButton';
 import * as PhosphorIcons from 'phosphor-react-native';
 
 type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
 
 const { width, height } = Dimensions.get('window');
 
+// Search mode types
+type SearchMode = 'search' | 'url';
+
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
   const { setError, clearError } = useApp();
   const { showSuccess, showError, showInfo, showWarning } = useToast();
-  const [url, setUrl] = useState('');
+  const { theme, themeMode } = useTheme();
+  const [searchMode, setSearchMode] = useState<SearchMode>('search');
+  const [input, setInput] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [recentUrls, setRecentUrls] = useState<string[]>([]);
+
+  // Handle search mode toggle
+  const handleSearchMode = () => {
+    if (searchMode === 'search') {
+      // Navigate to search screen with parameters
+      navigation.navigate('Search', {
+        initialQuery: input,
+        searchMode: 'search',
+        placeholder: 'Search for songs, artists, or albums...',
+        autoFocus: !input.trim() // Auto focus only if no initial query
+      });
+    } else {
+      // Handle URL input mode
+      handleCheckUrl();
+    }
+  };
+
+  // Clear input when switching modes for better UX
+  useEffect(() => {
+    // Clear input when switching between modes
+    // setInput('');
+    // We're not clearing input automatically to preserve user input during mode switching
+  }, [searchMode]);
 
   // URL validation
   const isValidUrl = (url: string): boolean => {
@@ -42,45 +72,48 @@ const HomeScreen: React.FC = () => {
 
   // Handle URL check
   const handleCheckUrl = async (): Promise<void> => {
-    if (!url.trim()) {
-      showError('Invalid Input', 'Please enter a URL');
+    if (!input.trim()) {
+      showError('Invalid Input', searchMode === 'url' ? 'Please enter a URL' : 'Please enter search terms');
       return;
     }
 
-    const validation = urlValidator.validateAndClean(url);
-    if (!validation.isValid || !validation.isSupported) {
-      showError('Invalid URL', validation.error || 'Please enter a valid YouTube, SoundCloud, or Vimeo URL');
-      return;
-    }
-
-    try {
-      setIsChecking(true);
-      clearError();
-
-      const response = await apiService.checkUrl(validation.cleanedUrl);
-      
-      if (response.success && response.data) {
-        // Add to recent URLs
-        const newRecentUrls = [url, ...recentUrls.filter(u => u !== url)].slice(0, 5);
-        setRecentUrls(newRecentUrls);
-        
-        // Navigate to info screen
-        navigation.navigate('Info', { metadata: response.data });
-      } else {
-        showError('Check Failed', response.error || 'Failed to check URL');
+    if (searchMode === 'url') {
+      const validation = urlValidator.validateAndClean(input);
+      if (!validation.isValid || !validation.isSupported) {
+        showError('Invalid URL', validation.error || 'Please enter a valid YouTube, SoundCloud, or Vimeo URL');
+        return;
       }
-    } catch (error) {
-      console.error('Error checking URL:', error);
-      showError('Network Error', 'Please check your connection and try again');
-      setError('Network error. Please check your connection.');
-    } finally {
-      setIsChecking(false);
+
+      try {
+        setIsChecking(true);
+        clearError();
+
+        const response = await apiService.checkUrl(validation.cleanedUrl);
+        
+        if (response.success && response.data) {
+          // Add to recent URLs
+          const newRecentUrls = [input, ...recentUrls.filter(u => u !== input)].slice(0, 5);
+          setRecentUrls(newRecentUrls);
+          
+          // Navigate to info screen
+          navigation.navigate('Info', { metadata: response.data });
+        } else {
+          showError('Check Failed', response.error || 'Failed to check URL');
+        }
+      } catch (error) {
+        console.error('Error checking URL:', error);
+        showError('Network Error', 'Please check your connection and try again');
+        setError('Network error. Please check your connection.');
+      } finally {
+        setIsChecking(false);
+      }
     }
   };
 
   // Handle recent URL selection
   const handleRecentUrlSelect = (recentUrl: string): void => {
-    setUrl(recentUrl);
+    setInput(recentUrl);
+    setSearchMode('url'); // Switch to URL mode when selecting recent URL
   };
 
   // Clear recent URLs
@@ -89,10 +122,18 @@ const HomeScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar 
+        barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'} 
+        backgroundColor={theme.colors.background} 
+      />
       
       <SafeAreaView style={styles.safeArea}>
+        {/* Theme Toggle Button */}
+        <View style={styles.themeToggleContainer}>
+          <ThemeToggleButton />
+        </View>
+        
         <KeyboardAvoidingView 
           style={styles.keyboardContainer} 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -103,41 +144,100 @@ const HomeScreen: React.FC = () => {
         >
           {/* Header Section */}
           <View style={styles.headerSection}>
-            <View style={styles.logoContainer}>
-              <PhosphorIcons.MusicNote size={48} color="#4A9EFF" weight="fill" />
+            <View style={[styles.logoContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
+              <PhosphorIcons.MusicNote size={48} color={theme.colors.primary} weight="fill" />
             </View>
-            <Text style={styles.title}>Music Bag</Text>
-            <Text style={styles.subtitle}>Download your favorite music from anywhere</Text>
+            <Text style={[styles.title, { color: theme.colors.text }]}>Music Bag</Text>
+            <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+              Search for music or paste URLs to download your favorites
+            </Text>
           </View>
 
           {/* Search Section */}
           <View style={styles.searchSection}>
-            <View style={styles.inputContainer}>
+            {/* Mode Toggle */}
+            <View style={[styles.modeToggleContainer, { 
+              backgroundColor: theme.colors.surface,
+              borderColor: theme.colors.border 
+            }]}>
+              <TouchableOpacity
+                style={[
+                  styles.modeToggle, 
+                  searchMode === 'search' && [styles.modeToggleActive, { backgroundColor: theme.colors.primary }]
+                ]}
+                onPress={() => setSearchMode('search')}
+              >
+                <PhosphorIcons.MagnifyingGlass 
+                  size={16} 
+                  color={searchMode === 'search' ? '#fff' : theme.colors.textSecondary} 
+                  weight="regular" 
+                />
+                <Text style={[
+                  styles.modeToggleText, 
+                  { color: theme.colors.textSecondary },
+                  searchMode === 'search' && styles.modeToggleTextActive
+                ]}>
+                  Search Music
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.modeToggle, 
+                  searchMode === 'url' && [styles.modeToggleActive, { backgroundColor: theme.colors.primary }]
+                ]}
+                onPress={() => setSearchMode('url')}
+              >
+                <PhosphorIcons.Link 
+                  size={16} 
+                  color={searchMode === 'url' ? '#fff' : theme.colors.textSecondary} 
+                  weight="regular" 
+                />
+                <Text style={[
+                  styles.modeToggleText, 
+                  { color: theme.colors.textSecondary },
+                  searchMode === 'url' && styles.modeToggleTextActive
+                ]}>
+                  Paste URL
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Input Container */}
+            <View style={[styles.inputContainer, { 
+              backgroundColor: 'transparent',
+              borderWidth: 1,
+              borderColor: theme.colors.border 
+            }]}>
               <View style={styles.inputWrapper}>
-                <PhosphorIcons.MagnifyingGlass size={20} color="#8E8E93" weight="regular" />
+                <PhosphorIcons.MagnifyingGlass size={20} color={theme.colors.textSecondary} weight="regular" />
                 <TextInput
-                  style={styles.input}
-                  placeholder="Paste YouTube, SoundCloud, or Vimeo URL"
-                  placeholderTextColor="#8E8E93"
-                  value={url}
-                  onChangeText={setUrl}
+                  style={[styles.input, { color: theme.colors.text }]}
+                  placeholder={
+                    searchMode === 'search' 
+                      ? "Search for songs, artists, or albums..."
+                      : "Paste YouTube, SoundCloud, or Vimeo URL"
+                  }
+                  placeholderTextColor={theme.colors.textSecondary}
+                  value={input}
+                  onChangeText={setInput}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  keyboardType="url"
+                  keyboardType={searchMode === 'url' ? 'url' : 'default'}
                   returnKeyType="search"
-                  onSubmitEditing={handleCheckUrl}
+                  onSubmitEditing={handleSearchMode}
                   editable={!isChecking}
                 />
               </View>
               <TouchableOpacity
-                style={[styles.searchButton, isChecking && styles.searchButtonDisabled]}
-                onPress={handleCheckUrl}
-                disabled={isChecking}
+                style={[styles.searchButton, { backgroundColor: theme.colors.primary }, (!input.trim() || isChecking) && styles.searchButtonDisabled]}
+                onPress={handleSearchMode}
+                disabled={!input.trim() || isChecking}
               >
                 {isChecking ? (
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
-                  <PhosphorIcons.MagnifyingGlass size={20} color="#fff" weight="bold" />
+                  <PhosphorIcons.ArrowRight size={20} color={input ? '#fff' : theme.colors.primary} weight="bold" />
                 )}
               </TouchableOpacity>
             </View>
@@ -146,19 +246,58 @@ const HomeScreen: React.FC = () => {
           {/* Quick Actions */}
           <View style={styles.quickActions}>
             <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => navigation.navigate('Library')}
+              style={[styles.quickActionButton, { 
+                backgroundColor: `${theme.colors.primary}10`,
+                borderWidth: 1,
+                borderColor: `${theme.colors.primary}30` 
+              }]}
+              onPress={() => {
+                navigation.navigate('Search', {
+                  initialQuery: input,
+                  searchMode: 'search',
+                  placeholder: 'Quick search for music...',
+                  autoFocus: true
+                });
+              }}
             >
-              <PhosphorIcons.Play size={24} color="#4A9EFF" weight="fill" />
-              <Text style={styles.quickActionText}>My Library</Text>
+              <View style={[styles.quickActionIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
+                <PhosphorIcons.MagnifyingGlass size={20} color={theme.colors.primary} weight="fill" />
+              </View>
+              <Text style={[styles.quickActionText, { color: theme.colors.text }]}>Quick Search</Text>
+              <Text style={[styles.quickActionDescription, { color: theme.colors.textSecondary }]}>Find music instantly</Text>
             </TouchableOpacity>
             
             <TouchableOpacity
-              style={styles.quickActionButton}
-              onPress={() => setUrl('https://www.youtube.com/watch?v=')}
+              style={[styles.quickActionButton, { 
+                backgroundColor: `${theme.colors.primary}10`,
+                borderWidth: 1,
+                borderColor: `${theme.colors.primary}30` 
+              }]}
+              onPress={() => navigation.navigate('Library')}
             >
-              <PhosphorIcons.Download size={24} color="#4A9EFF" weight="fill" />
-              <Text style={styles.quickActionText}>YouTube</Text>
+              <View style={[styles.quickActionIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
+                <PhosphorIcons.Play size={20} color={theme.colors.primary} weight="fill" />
+              </View>
+              <Text style={[styles.quickActionText, { color: theme.colors.text }]}>My Library</Text>
+              <Text style={[styles.quickActionDescription, { color: theme.colors.textSecondary }]}>Your collection</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+               style={[styles.quickActionButton, { 
+                backgroundColor: `${theme.colors.primary}10`,
+                borderWidth: 1,
+                borderColor: `${theme.colors.primary}30` 
+              }]}
+              onPress={() => {
+                setSearchMode('url');
+                setInput('https://www.youtube.com/watch?v=');
+              }}
+            >
+              <View style={[styles.quickActionIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
+                <PhosphorIcons.Link size={20} color={theme.colors.primary} weight="fill" />
+              </View>
+              <Text style={[styles.quickActionText, { color: theme.colors.text }]}>Paste URL</Text>
+              <Text style={[styles.quickActionDescription, { color: theme.colors.textSecondary }]}>Download direct</Text>
             </TouchableOpacity>
           </View>
 
@@ -183,22 +322,40 @@ const HomeScreen: React.FC = () => {
 
           {/* Features Section */}
           <View style={styles.featuresSection}>
-            <Text style={styles.sectionTitle}>Features</Text>
+            <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>Features</Text>
             <View style={styles.featureGrid}>
-              <View style={styles.featureItem}>
-                <PhosphorIcons.Download size={32} color="#4A9EFF" weight="fill" />
-                <Text style={styles.featureTitle}>Download</Text>
-                <Text style={styles.featureDescription}>Save audio offline</Text>
+              <View style={[styles.featureItem, { 
+                backgroundColor: `${theme.colors.primary}08`,
+                borderWidth: 1,
+                borderColor: `${theme.colors.primary}20` 
+              }]}>
+                <View style={[styles.featureIconContainer, { backgroundColor: `${theme.colors.primary}15` }]}>
+                  <PhosphorIcons.MagnifyingGlass size={24} color={theme.colors.primary} weight="fill" />
+                </View>
+                <Text style={[styles.featureTitle, { color: theme.colors.text }]}>Search</Text>
+                <Text style={[styles.featureDescription, { color: theme.colors.textSecondary }]}>Find music easily</Text>
               </View>
-              <View style={styles.featureItem}>
-                <PhosphorIcons.Play size={32} color="#4A9EFF" weight="fill" />
-                <Text style={styles.featureTitle}>Play</Text>
-                <Text style={styles.featureDescription}>Listen anywhere</Text>
+              <View style={[styles.featureItem, { 
+                backgroundColor: `${theme.colors.primary}08`,
+                borderWidth: 1,
+                borderColor: `${theme.colors.primary}20` 
+              }]}>
+                <View style={[styles.featureIconContainer, { backgroundColor: `${theme.colors.primary}15` }]}>
+                  <PhosphorIcons.Download size={24} color={theme.colors.primary} weight="fill" />
+                </View>
+                <Text style={[styles.featureTitle, { color: theme.colors.text }]}>Download</Text>
+                <Text style={[styles.featureDescription, { color: theme.colors.textSecondary }]}>Save audio offline</Text>
               </View>
-              <View style={styles.featureItem}>
-                <PhosphorIcons.Heart size={32} color="#4A9EFF" weight="fill" />
-                <Text style={styles.featureTitle}>Favorites</Text>
-                <Text style={styles.featureDescription}>Save favorites</Text>
+              <View style={[styles.featureItem, { 
+                backgroundColor: `${theme.colors.primary}08`,
+                borderWidth: 1,
+                borderColor: `${theme.colors.primary}20` 
+              }]}>
+                <View style={[styles.featureIconContainer, { backgroundColor: `${theme.colors.primary}15` }]}>
+                  <PhosphorIcons.Play size={24} color={theme.colors.primary} weight="fill" />
+                </View>
+                <Text style={[styles.featureTitle, { color: theme.colors.text }]}>Play</Text>
+                <Text style={[styles.featureDescription, { color: theme.colors.textSecondary }]}>Listen anywhere</Text>
               </View>
             </View>
           </View>
@@ -212,10 +369,16 @@ const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#FFFFFF',
   },
   safeArea: {
     flex: 1,
+  },
+  themeToggleContainer: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 100,
   },
   keyboardContainer: {
     flex: 1,
@@ -245,7 +408,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     fontWeight: '800',
-    color: '#fff',
+    color: '#1D1D1F',
     marginBottom: 8,
     letterSpacing: 1,
   },
@@ -261,15 +424,44 @@ const styles = StyleSheet.create({
   searchSection: {
     marginBottom: 30,
   },
+  modeToggleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    borderRadius: 50, // Expo Go style rounded tabs
+    padding: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    // borderColor will be set via theme
+  },
+  modeToggle: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 50, // Expo Go style rounded tabs
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  modeToggleActive: {
+    // backgroundColor will be set via theme
+  },
+  modeToggleText: {
+    fontSize: 14,
+    fontWeight: '600',
+    // color will be set via theme
+  },
+  modeToggleTextActive: {
+    color: '#fff',
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 25,
-    paddingHorizontal: 20,
+    backgroundColor: '#F2F2F7',
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   inputWrapper: {
     flex: 1,
@@ -280,18 +472,18 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#fff',
+    color: '#1D1D1F',
     paddingVertical: 16,
     paddingLeft: 12,
   },
   searchButton: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     borderRadius: 24,
-    backgroundColor: '#4A9EFF',
+    backgroundColor: '#007AFF',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#4A9EFF',
+    shadowColor: '#007AFF',
     shadowOffset: {
       width: 0,
       height: 4,
@@ -301,7 +493,9 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   searchButtonDisabled: {
-    backgroundColor: '#333',
+    backgroundColor: 'transparent',
+    borderWidth:1,
+    borderColor:'#C7C7CC'
   },
 
   // Quick Actions
@@ -309,23 +503,43 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 30,
+    gap: 8,
   },
   quickActionButton: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     paddingVertical: 20,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
-    marginHorizontal: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  quickActionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   quickActionText: {
-    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    marginTop: 8,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  quickActionDescription: {
+    fontSize: 11,
+    fontWeight: '500',
+    textAlign: 'center',
+    opacity: 0.8,
   },
 
   // Recent Section
@@ -335,20 +549,18 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#fff',
+    color: '#1D1D1F',
     marginBottom: 16,
     letterSpacing: 0.5,
   },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    backgroundColor: '#F2F2F7',
     paddingVertical: 16,
     paddingHorizontal: 20,
     borderRadius: 12,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   recentText: {
     flex: 1,
@@ -367,27 +579,39 @@ const styles = StyleSheet.create({
   },
   featureItem: {
     flex: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     paddingVertical: 24,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     alignItems: 'center',
-    marginHorizontal: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 4,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  featureIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
   featureTitle: {
-    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    marginTop: 12,
     marginBottom: 4,
+    textAlign: 'center',
   },
   featureDescription: {
-    color: '#8E8E93',
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 16,
+    opacity: 0.8,
   },
 });
 

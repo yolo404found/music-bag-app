@@ -13,6 +13,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../types';
 import { useAudio } from '../../core/providers/AudioProvider';
 import { useToast } from '../../core/providers/ToastProvider';
+import { useTheme } from '../../core/providers/ThemeProvider';
 import * as PhosphorIcons from 'phosphor-react-native';
 
 type MiniPlayerNavigationProp = StackNavigationProp<RootStackParamList>;
@@ -31,6 +32,7 @@ const MiniPlayer: React.FC = () => {
     stopAudio 
   } = useAudio();
   const { showInfo } = useToast();
+  const { theme } = useTheme();
 
   // Track current screen name using navigation state
   const [currentScreen, setCurrentScreen] = useState<string>('');
@@ -54,9 +56,17 @@ const MiniPlayer: React.FC = () => {
   const bar1Anim = useRef(new Animated.Value(0.3)).current;
   const bar2Anim = useRef(new Animated.Value(0.5)).current;
   const bar3Anim = useRef(new Animated.Value(0.7)).current;
+  const animationRef = useRef<number | null>(null);
 
   // Animate playing indicator bars
   useEffect(() => {
+    const cleanupAnimation = () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+        animationRef.current = null;
+      }
+    };
+    
     if (isPlaying) {
       const animateBars = () => {
         Animated.sequence([
@@ -94,14 +104,17 @@ const MiniPlayer: React.FC = () => {
               useNativeDriver: false,
             }),
           ]),
-        ]).start(() => {
-          if (isPlaying) {
-            animateBars();
+        ]).start(({ finished }) => {
+          if (finished && isPlaying) {
+            animationRef.current = requestAnimationFrame(animateBars);
           }
         });
       };
-      animateBars();
+      animationRef.current = requestAnimationFrame(animateBars);
     } else {
+      // Clean up any existing animation
+      cleanupAnimation();
+      
       // Reset bars to default position when paused
       Animated.parallel([
         Animated.timing(bar1Anim, {
@@ -121,6 +134,10 @@ const MiniPlayer: React.FC = () => {
         }),
       ]).start();
     }
+    
+    return () => {
+      cleanupAnimation();
+    };
   }, [isPlaying, bar1Anim, bar2Anim, bar3Anim]);
 
   // Don't render if no audio is playing or if we're on the Player screen
@@ -145,7 +162,7 @@ const MiniPlayer: React.FC = () => {
 
   const handleStop = async () => {
     await stopAudio();
-    showInfo('Audio Stopped', 'Playback has been stopped');
+    // showInfo('Audio Stopped', 'Playback has been stopped');
   };
 
   const handlePress = () => {
@@ -153,9 +170,19 @@ const MiniPlayer: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container,{backgroundColor: theme.colors.background}]}>
+      {/* Backdrop for better visibility in dark mode */}
+      {theme.mode === 'dark' && (
+        <View style={[styles.backdrop, { 
+          backgroundColor: `${theme.colors.background}B0` 
+        }]} />
+      )}
       {/* Floating Card */}
-      <View style={styles.floatingCard}>
+      <View style={[styles.floatingCard, { 
+        backgroundColor: theme.mode === 'dark' ? `${theme.colors.card}F0` : theme.colors.card,
+        borderColor: theme.colors.border,
+        shadowColor: theme.colors.shadow
+      }]}>
         {/* Main Content */}
         <View style={styles.content}>
           <TouchableOpacity style={styles.trackSection} onPress={handlePress}>
@@ -210,13 +237,13 @@ const MiniPlayer: React.FC = () => {
 
             {/* Track Info */}
             <View style={styles.trackInfo}>
-              <Text style={styles.trackTitle} numberOfLines={1}>
+              <Text style={[styles.trackTitle, { color: theme.colors.text }]} numberOfLines={1}>
                 {currentAudio.title}
               </Text>
-              <Text style={styles.trackArtist} numberOfLines={1}>
+              <Text style={[styles.trackArtist, { color: theme.colors.textSecondary }]} numberOfLines={1}>
                 Unknown Artist
               </Text>
-              <Text style={styles.timeInfo}>
+              <Text style={[styles.timeInfo, { color: theme.colors.textSecondary }]}>
                 {formatTime(position)} / {formatTime(duration)}
               </Text>
             </View>
@@ -225,18 +252,26 @@ const MiniPlayer: React.FC = () => {
           {/* Controls */}
           <View style={styles.controls}>
             <TouchableOpacity 
-              style={[styles.controlButton, styles.playButton]}
+              style={[styles.controlButton, styles.playButton, { 
+                backgroundColor: theme.colors.primary,
+                borderColor: theme.colors.primary,
+                shadowColor: theme.colors.primary
+              }]}
               onPress={handlePlayPause}
             >
               {isPlaying ? (
-                <PhosphorIcons.Pause size={18} color="#fff" weight="bold" />
+                <PhosphorIcons.Pause size={18} color="#FFFFFF" weight="bold" />
               ) : (
-                <PhosphorIcons.Play size={18} color="#fff" weight="bold" />
+                <PhosphorIcons.Play size={18} color="#FFFFFF" weight="bold" />
               )}
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.controlButton}
+              style={[styles.controlButton, { 
+                backgroundColor: theme.colors.surface,
+                borderColor: theme.colors.border,
+                shadowColor: theme.colors.shadow
+              }]}
               onPress={handleStop}
             >
               <PhosphorIcons.X size={16} color="#8E8E93" weight="bold" />
@@ -246,11 +281,15 @@ const MiniPlayer: React.FC = () => {
 
         {/* Progress Bar */}
         <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
+          <View style={[styles.progressBar, { backgroundColor: theme.colors.surface }]}> 
             <View 
               style={[
                 styles.progressFill, 
-                { width: `${duration > 0 ? (position / duration) * 100 : 0}%` }
+                { 
+                  width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
+                  backgroundColor: theme.colors.primary,
+                  shadowColor: theme.colors.primary
+                }
               ]} 
             />
           </View>
@@ -268,14 +307,23 @@ const styles = StyleSheet.create({
     right: 16,
     zIndex: 1000,
   },
+  backdrop: {
+    position: 'absolute',
+    top: -10,
+    left: -10,
+    right: -10,
+    bottom: -10,
+    borderRadius: 30,
+    // backgroundColor will be set dynamically via theme
+  },
   floatingCard: {
-    backgroundColor: '#1A1A1A',
+    // backgroundColor will be set dynamically via theme with proper opacity
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    shadowColor: '#000',
+    // borderColor will be set dynamically via theme
+    // shadowColor will be set dynamically via theme
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 20,
     overflow: 'hidden',
@@ -303,9 +351,9 @@ const styles = StyleSheet.create({
     right: -2,
     bottom: -2,
     borderRadius: 14,
-    backgroundColor: '#4A9EFF',
+    backgroundColor: '#007AFF', // Keep static for visual consistency
     opacity: 0.35,
-    shadowColor: '#4A9EFF',
+    shadowColor: '#007AFF', // Keep static for visual consistency
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 6,
@@ -314,14 +362,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: '#4A9EFF',
+    backgroundColor: '#007AFF', // Keep static for visual consistency
     overflow: 'hidden',
     position: 'relative',
-    shadowColor: '#4A9EFF',
+    shadowColor: '#007AFF', // Keep static for visual consistency
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
     elevation: 3,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)', // Subtle border for better visibility
   },
   thumbnail: {
     width: '100%',
@@ -339,7 +389,7 @@ const styles = StyleSheet.create({
   },
   playingBar: {
     width: 2,
-    backgroundColor: '#4A9EFF',
+    backgroundColor: '#007AFF', // Keep static for visual consistency
     borderRadius: 1,
     minHeight: 2,
   },
@@ -348,20 +398,20 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   trackTitle: {
-    color: '#fff',
+    // color will be set dynamically via theme
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 3,
     letterSpacing: 0.2,
   },
   trackArtist: {
-    color: '#B0B0B0',
+    // color will be set dynamically via theme
     fontSize: 13,
     fontWeight: '400',
     marginBottom: 2,
   },
   timeInfo: {
-    color: '#8E8E93',
+    // color will be set dynamically via theme
     fontSize: 11,
     fontWeight: '500',
     opacity: 0.8,
@@ -375,21 +425,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    // backgroundColor will be set dynamically via theme
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    shadowColor: '#000',
+    // borderColor will be set dynamically via theme
+    // shadowColor will be set dynamically via theme
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
   },
   playButton: {
-    backgroundColor: '#4A9EFF',
-    borderColor: '#4A9EFF',
-    shadowColor: '#4A9EFF',
+    // backgroundColor, borderColor, shadowColor will be set dynamically via theme
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4,
     shadowRadius: 6,
@@ -401,15 +449,15 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 3.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    // backgroundColor will be set dynamically via theme
     borderRadius: 1.75,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#4A9EFF',
+    // backgroundColor will be set dynamically via theme
     borderRadius: 1.75,
-    shadowColor: '#4A9EFF',
+    // shadowColor will be set dynamically via theme
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 2.5,

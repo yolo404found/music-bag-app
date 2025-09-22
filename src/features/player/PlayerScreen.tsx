@@ -20,6 +20,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { RootStackParamList, DownloadedAudio } from '../../shared/types';
 import { useApp } from '../../core/providers/AppProvider';
 import { useAudio } from '../../core/providers/AudioProvider';
+import { useTheme } from '../../core/providers/ThemeProvider';
 import { storageService } from '../../shared/services/storageService';
 import * as PhosphorIcons from 'phosphor-react-native';
 
@@ -47,8 +48,16 @@ const PlayerScreen: React.FC = () => {
     resumeAudio: globalResumeAudio,
     stopAudio: globalStopAudio,
     seekTo: globalSeekTo,
-    setCurrentAudio: setGlobalCurrentAudio
+    setCurrentAudio: setGlobalCurrentAudio,
+    playlist: globalPlaylist,
+    currentIndex: globalCurrentIndex,
+    setPlaylist: globalSetPlaylist,
+    playNext: globalPlayNext,
+    playPrevious: globalPlayPrevious,
+    isAutoPlayEnabled: globalIsAutoPlayEnabled,
+    toggleAutoPlay: globalToggleAutoPlay
   } = useAudio();
+  const { theme, themeMode } = useTheme();
   
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -411,10 +420,18 @@ const PlayerScreen: React.FC = () => {
         // stopVisualization();
         console.log('🎵 Audio paused successfully');
       } else {
-        console.log('🎵 Playing audio...');
-        await globalPlayAudio(currentAudio);
-        // startVisualization();
-        console.log('🎵 Audio play command sent');
+        // Check if this is the same audio that was paused
+        if (globalCurrentAudio && globalCurrentAudio.id === currentAudio.id && globalSound) {
+          console.log('🎵 Resuming paused audio...');
+          await globalResumeAudio();
+          // startVisualization();
+          console.log('🎵 Audio resumed successfully');
+        } else {
+          console.log('🎵 Playing new audio...');
+          await globalPlayAudio(currentAudio);
+          // startVisualization();
+          console.log('🎵 Audio play command sent');
+        }
       }
     } catch (error) {
       console.error('🎵 Error toggling playback:', error);
@@ -557,31 +574,21 @@ const PlayerScreen: React.FC = () => {
   };
 
   // Handle previous track
-  const handlePrevious = (): void => {
-    if (playlist.length === 0) return;
-    
-    let newIndex = currentTrackIndex - 1;
-    if (newIndex < 0) {
-      newIndex = playlist.length - 1; // Loop to last track
+  const handlePrevious = async (): Promise<void> => {
+    try {
+      await globalPlayPrevious();
+    } catch (error) {
+      console.error('Error playing previous track:', error);
     }
-    
-    const previousAudio = playlist[newIndex];
-    setCurrentTrackIndex(newIndex);
-    changeCurrentAudio(previousAudio);
   };
 
   // Handle next track
-  const handleNext = (): void => {
-    if (playlist.length === 0) return;
-    
-    let newIndex = currentTrackIndex + 1;
-    if (newIndex >= playlist.length) {
-      newIndex = 0; // Loop to first track
+  const handleNext = async (): Promise<void> => {
+    try {
+      await globalPlayNext();
+    } catch (error) {
+      console.error('Error playing next track:', error);
     }
-    
-    const nextAudio = playlist[newIndex];
-    setCurrentTrackIndex(newIndex);
-    changeCurrentAudio(nextAudio);
   };
 
   // Format time
@@ -607,8 +614,11 @@ const PlayerScreen: React.FC = () => {
   }, [sound]);
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar 
+        barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'} 
+        backgroundColor={theme.colors.background} 
+      />
       
       {/* Audio Visualization Background */}
       {/* {globalIsPlaying && visualizationBars.length > 0 && (
@@ -637,20 +647,20 @@ const PlayerScreen: React.FC = () => {
       {/* Header */}
       <SafeAreaView style={styles.header}>
         <TouchableOpacity
-          style={styles.backButton}
+          style={[styles.backButton, { backgroundColor: theme.colors.surface }]}
           onPress={() => navigation.goBack()}
         >
-          <PhosphorIcons.CaretDown size={20} color="#fff" weight="bold" />
+          <PhosphorIcons.CaretDown size={20} color={theme.colors.text} weight="bold" />
         </TouchableOpacity>
         
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Now Playing</Text>
+          <Text style={[styles.headerTitle, { color: theme.colors.text }]}>Now Playing</Text>
         </View>
         
         <TouchableOpacity
-          style={styles.equalizerButton}
+          style={[styles.equalizerButton, { backgroundColor: theme.colors.surface }]}
         >
-          <PhosphorIcons.Equalizer size={20} color="#fff" weight="bold" />
+          <PhosphorIcons.Equalizer size={20} color={theme.colors.text} weight="bold" />
         </TouchableOpacity>
       </SafeAreaView>
 
@@ -665,7 +675,13 @@ const PlayerScreen: React.FC = () => {
       >
         {/* Album Art Section */}
         <View style={styles.albumSection}>
-          <View style={styles.albumArtContainer}>
+          <View style={[styles.albumArtContainer, {
+            shadowColor: theme.colors.shadow,
+            shadowOffset: { width: 0, height: 8 },
+            shadowOpacity: 0.15,
+            shadowRadius: 20,
+            elevation: 8,
+          }]}>
             <Image
               source={{ uri: currentAudio.thumbnail }}
               style={styles.albumArt}
@@ -673,21 +689,21 @@ const PlayerScreen: React.FC = () => {
             />
             {/* Album Art Overlay */}
             <View style={styles.albumArtOverlay}>
-              {/* <View style={styles.artistOverlay}>
-                <PhosphorIcons.User size={12} color="#fff" weight="bold" />
-                <Text style={styles.artistOverlayText}>WILLIAM BLACK</Text>
-              </View> */}
-              <Text style={styles.albumTitleOverlay}>MUSIC BAG</Text>
+              <Text style={[styles.albumTitleOverlay, {
+                textShadowColor: 'rgba(0, 0, 0, 0.7)',
+                textShadowOffset: { width: 0, height: 1 },
+                textShadowRadius: 3,
+              }]}>MUSIC BAG</Text>
             </View>
           </View>
         </View>
 
         {/* Track Info */}
         <View style={styles.trackInfo}>
-          <Text style={styles.trackTitle} numberOfLines={1}>
+          <Text style={[styles.trackTitle, { color: theme.colors.text }]} numberOfLines={1}>
             {currentAudio.title}
           </Text>
-          <Text style={styles.trackArtist} numberOfLines={1}>
+          <Text style={[styles.trackArtist, { color: theme.colors.textSecondary }]} numberOfLines={1}>
             Unknown Artist
           </Text>
         </View>
@@ -695,8 +711,8 @@ const PlayerScreen: React.FC = () => {
         {/* Progress Bar */}
         <View style={styles.progressContainer}>
           <View style={styles.timeContainer}>
-            <Text style={styles.timeText}>{formatTime(globalPosition)}</Text>
-            <Text style={styles.timeText}>{formatTime(globalDuration)}</Text>
+            <Text style={[styles.timeText, { color: theme.colors.textSecondary }]}>{formatTime(globalPosition)}</Text>
+            <Text style={[styles.timeText, { color: theme.colors.textSecondary }]}>{formatTime(globalDuration)}</Text>
           </View>
           <Slider
             style={styles.progressSlider}
@@ -706,23 +722,23 @@ const PlayerScreen: React.FC = () => {
             onSlidingStart={handleSeekStart}
             onValueChange={handleSeekChange}
             onSlidingComplete={handleSeekComplete}
-            minimumTrackTintColor="#4A9EFF"
-            maximumTrackTintColor="rgba(255,255,255,0.2)"
-            thumbTintColor="#4A9EFF"
+            minimumTrackTintColor={theme.colors.primary}
+            maximumTrackTintColor={theme.colors.border}
+            thumbTintColor={theme.colors.primary}
             step={0.1}
             disabled={!globalSound || isLoading || globalIsBuffering}
           />
           {/* Debug Info */}
-          {/* <View style={styles.debugContainer}>
-            <Text style={styles.debugText}>Debug Info:</Text>
-            <Text style={styles.debugText}>Local Sound: {sound ? '✅' : '❌'}</Text>
-            <Text style={styles.debugText}>Global Sound: {globalSound ? '✅' : '❌'}</Text>
-            <Text style={styles.debugText}>Loading: {isLoading ? '✅' : '❌'}</Text>
-            <Text style={styles.debugText}>Buffering: {globalIsBuffering ? '✅' : '❌'}</Text>
-            <Text style={styles.debugText}>Playing: {globalIsPlaying ? '✅' : '❌'}</Text>
-            <Text style={styles.debugText}>Position: {globalPosition.toFixed(2)}s</Text>
-            <Text style={styles.debugText}>Duration: {globalDuration.toFixed(2)}s</Text>
-            <Text style={styles.debugText}>Disabled: {(!globalSound || isLoading || globalIsBuffering) ? '✅' : '❌'}</Text>
+          {/* <View style={[styles.debugContainer, { backgroundColor: theme.colors.surface }]}>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Debug Info:</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Local Sound: {sound ? '✅' : '❌'}</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Global Sound: {globalSound ? '✅' : '❌'}</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Loading: {isLoading ? '✅' : '❌'}</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Buffering: {globalIsBuffering ? '✅' : '❌'}</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Playing: {globalIsPlaying ? '✅' : '❌'}</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Position: {globalPosition.toFixed(2)}s</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Duration: {globalDuration.toFixed(2)}s</Text>
+            <Text style={[styles.debugText, { color: theme.colors.text }]}>Disabled: {(!globalSound || isLoading || globalIsBuffering) ? '✅' : '❌'}</Text>
           </View> */}
         </View>
 
@@ -733,8 +749,8 @@ const PlayerScreen: React.FC = () => {
           onPress={handleShuffleToggle}
         >
           <PhosphorIcons.Shuffle 
-            size={20} 
-            color={isShuffled ? "#4A9EFF" : "#fff"} 
+            size={26} 
+            color={isShuffled ? theme.colors.primary : theme.colors.textSecondary} 
             weight="bold" 
           />
         </TouchableOpacity>
@@ -743,23 +759,34 @@ const PlayerScreen: React.FC = () => {
           style={styles.controlButton}
           onPress={handlePrevious}
         >
-          <PhosphorIcons.SkipBack size={20} color="#fff" weight="bold" />
+          <PhosphorIcons.SkipBack size={26} color={theme.colors.textSecondary} weight="bold" />
         </TouchableOpacity>
         
         <TouchableOpacity 
-          style={styles.playPauseButton}
+          style={[styles.playPauseButton, { 
+            backgroundColor: theme.colors.primary,
+            shadowColor: theme.colors.primary,
+            opacity: (!globalSound || isLoading || globalIsBuffering) ? 0.6 : 1
+          }]}
           onPress={handlePlayPause}
+          disabled={!globalSound || isLoading || globalIsBuffering}
         >
-          {globalIsPlaying ? (
+          {(isLoading || globalIsBuffering) ? (
+            <PhosphorIcons.CircleNotch 
+              size={24} 
+              color="#FFFFFF" 
+              weight="bold" 
+            />
+          ) : globalIsPlaying ? (
             <PhosphorIcons.Pause 
               size={24} 
-              color="#000" 
+              color="#FFFFFF" 
               weight="bold" 
             />
           ) : (
             <PhosphorIcons.Play 
               size={24} 
-              color="#000" 
+              color="#FFFFFF" 
               weight="bold" 
             />
           )}
@@ -769,7 +796,7 @@ const PlayerScreen: React.FC = () => {
           style={styles.controlButton}
           onPress={handleNext}
         >
-          <PhosphorIcons.SkipForward size={20} color="#fff" weight="bold" />
+          <PhosphorIcons.SkipForward size={26} color={theme.colors.textSecondary} weight="bold" />
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -777,25 +804,36 @@ const PlayerScreen: React.FC = () => {
           onPress={handleRepeatToggle}
         >
           <PhosphorIcons.Repeat 
-            size={20} 
-            color={isRepeating ? "#4A9EFF" : "#fff"} 
+            size={26} 
+            color={isRepeating ? theme.colors.primary : theme.colors.textSecondary} 
             weight="bold" 
           />
         </TouchableOpacity>
+        
+        {/* <TouchableOpacity 
+          style={styles.controlButton}
+          onPress={globalToggleAutoPlay}
+        >
+          <PhosphorIcons.PlayCircle 
+            size={20} 
+            color={globalIsAutoPlayEnabled ? theme.colors.primary : theme.colors.textSecondary} 
+            weight="bold" 
+          />
+        </TouchableOpacity> */}
       </View>
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.actionButton}>
-            <PhosphorIcons.MusicNote size={22} color="#fff" weight="bold" />
+          <TouchableOpacity style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}>
+            <PhosphorIcons.MusicNote size={22} color={theme.colors.textSecondary} weight="bold" />
           </TouchableOpacity>
           <TouchableOpacity 
-            style={styles.actionButton}
+            style={[styles.actionButton, { backgroundColor: theme.colors.surface }]}
             onPress={handleFavoriteToggle}
           >
             <PhosphorIcons.Heart 
               size={22} 
-              color={isFavorite ? "#ff6b6b" : "#fff"} 
+              color={isFavorite ? theme.colors.error : theme.colors.textSecondary} 
               weight={isFavorite ? "fill" : "regular"} 
             />
           </TouchableOpacity>
@@ -804,30 +842,38 @@ const PlayerScreen: React.FC = () => {
         {/* Up Next Section */}
         <View style={styles.upNextContainer}>
           <View style={styles.upNextHeader}>
-            <Text style={styles.upNextTitle}>UP NEXT</Text>
+            <Text style={[styles.upNextTitle, { color: theme.colors.textSecondary }]}>UP NEXT</Text>
             <TouchableOpacity onPress={() => navigation.navigate('Library')}>
-              <PhosphorIcons.List size={18} color="#8E8E93" weight="bold" />
+              <PhosphorIcons.List size={18} color={theme.colors.textSecondary} weight="bold" />
             </TouchableOpacity>
           </View>
           <View style={styles.upNextList}>
-            {playlist.slice(currentTrackIndex + 1, currentTrackIndex + 3).map((item, index) => (
+            {globalPlaylist.slice(globalCurrentIndex + 1, globalCurrentIndex + 3).map((item, index) => (
               <TouchableOpacity 
                 key={item.id} 
-                style={styles.upNextItem}
-                onPress={() => {
-                  const newIndex = currentTrackIndex + index + 1;
-                  setCurrentTrackIndex(newIndex);
-                  changeCurrentAudio(item);
+                style={[styles.upNextItem, { 
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border 
+                }]}
+                onPress={async () => {
+                  try {
+                    const newIndex = globalCurrentIndex + index + 1;
+                    // Set playlist with new index and play the audio
+                    globalSetPlaylist(globalPlaylist, newIndex);
+                    await globalPlayAudio(item);
+                  } catch (error) {
+                    console.error('Error playing selected audio:', error);
+                  }
                 }}
               >
                 <View style={styles.upNextItemInfo}>
-                  <Text style={styles.upNextItemTitle} numberOfLines={1}>
+                  <Text style={[styles.upNextItemTitle, { color: theme.colors.text }]} numberOfLines={1}>
                     {item.title}
                   </Text>
-                  <Text style={styles.upNextItemArtist} numberOfLines={1}>
+                  <Text style={[styles.upNextItemArtist, { color: theme.colors.textSecondary }]} numberOfLines={1}>
                     Unknown Artist
                   </Text>
-                  <Text style={styles.upNextItemDuration}>
+                  <Text style={[styles.upNextItemDuration, { color: theme.colors.textSecondary }]}>
                     {formatTime(item.duration)}
                   </Text>
                 </View>
@@ -835,7 +881,7 @@ const PlayerScreen: React.FC = () => {
             ))}
             {playlist.length <= 1 && (
               <View style={styles.upNextItem}>
-                <Text style={styles.upNextEmptyText}>No more tracks in playlist</Text>
+                <Text style={[styles.upNextEmptyText, { color: theme.colors.textSecondary }]}>No more tracks in playlist</Text>
               </View>
             )}
           </View>
@@ -851,7 +897,7 @@ const PlayerScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    // backgroundColor will be set dynamically via theme
   },
   header: {
     flexDirection: 'row',
@@ -863,8 +909,10 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   backButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    // backgroundColor will be set dynamically via theme
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -873,14 +921,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#fff',
+    // color will be set dynamically via theme
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 1,
   },
   equalizerButton: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    // backgroundColor will be set dynamically via theme
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -896,6 +946,7 @@ const styles = StyleSheet.create({
     height: 100,
   },
   albumSection: {
+    marginTop:16,
     marginBottom: 30,
     alignItems: 'center',
   },
@@ -903,6 +954,9 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignItems: 'center',
     marginBottom: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    // shadow properties will be set dynamically via theme
   },
   albumArt: {
     width: width * 0.85,
@@ -947,14 +1001,14 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   trackTitle: {
-    color: '#fff',
+    // color will be set dynamically via theme
     fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 8,
   },
   trackArtist: {
-    color: '#8E8E93',
+    // color will be set dynamically via theme
     fontSize: 16,
     fontWeight: '400',
   },
@@ -966,13 +1020,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   debugContainer: {
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    // backgroundColor and borderRadius will be set dynamically via theme
     padding: 10,
-    borderRadius: 8,
-    marginTop: 10,
   },
   debugText: {
-    color: '#fff',
+    // color will be set dynamically via theme
     fontSize: 12,
     fontFamily: 'monospace',
     marginBottom: 2,
@@ -983,7 +1035,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   timeText: {
-    color: '#fff',
+    // color will be set dynamically via theme
     fontSize: 14,
     fontWeight: '500',
   },
@@ -996,7 +1048,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    // backgroundColor will be set dynamically via theme
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1007,10 +1059,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 20,
   },
   upNextTitle: {
-    color: '#8E8E93',
+    // color will be set dynamically via theme
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1,
@@ -1019,7 +1071,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   upNextItem: {
-    paddingVertical: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    minHeight:60,
+    // backgroundColor and borderColor will be set dynamically via theme
+    borderWidth: 1,
+    marginBottom: 8,
   },
   upNextItemInfo: {
     flexDirection: 'row',
@@ -1027,24 +1085,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   upNextItemTitle: {
-    color: '#fff',
+    // color will be set dynamically via theme
     fontSize: 16,
     fontWeight: '500',
     flex: 1,
   },
   upNextItemArtist: {
-    color: '#8E8E93',
+    // color will be set dynamically via theme
     fontSize: 14,
     fontWeight: '400',
     flex: 1,
   },
   upNextItemDuration: {
-    color: '#8E8E93',
+    // color will be set dynamically via theme
     fontSize: 14,
     fontWeight: '400',
   },
   upNextEmptyText: {
-    color: '#8E8E93',
+    // color will be set dynamically via theme
     fontSize: 14,
     fontWeight: '400',
     textAlign: 'center',
@@ -1068,9 +1126,13 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#fff',
+    // backgroundColor and shadowColor will be set dynamically via theme
     alignItems: 'center',
     justifyContent: 'center',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 4,
   },
   visualizationContainer: {
     position: 'absolute',
@@ -1087,7 +1149,7 @@ const styles = StyleSheet.create({
   },
   visualizationBar: {
     width: 3,
-    backgroundColor: '#4A9EFF',
+    backgroundColor: '#007AFF', // Keep static for visualization effect
     borderRadius: 2,
     marginHorizontal: 1,
   },

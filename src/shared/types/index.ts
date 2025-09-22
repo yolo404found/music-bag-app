@@ -22,6 +22,26 @@ export interface DownloadedAudio {
   position: number; // playback position in seconds
   favorite: boolean;
   fileSize: number;
+  folderId: string; // ID of the folder this audio belongs to
+}
+
+// Folder/Playlist types
+export interface Folder {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  isDefault: boolean; // true for "Downloads" folder
+  audioCount: number; // cached count of audios in this folder
+}
+
+// Folder operations
+export interface FolderOperation {
+  type: 'create' | 'rename' | 'delete' | 'move_audio';
+  folderId?: string;
+  newName?: string;
+  audioIds?: string[];
+  targetFolderId?: string;
 }
 
 // API response types
@@ -40,17 +60,35 @@ export interface DownloadResponse {
   error?: string;
 }
 
+// Search parameters for the Search screen
+export interface SearchParams {
+  initialQuery?: string;
+  searchMode?: 'search' | 'url';
+  placeholder?: string;
+  autoFocus?: boolean;
+}
+
 // Navigation types
-export type RootStackParamList = {
+export type TabParamList = {
   Home: undefined;
+  Search: SearchParams | undefined;
+  Library: undefined;
+};
+
+export type RootStackParamList = {
+  MainTabs: undefined;
+  Home: undefined;
+  Search: SearchParams | undefined;
   Info: { metadata: AudioMetadata };
   Library: undefined;
+  Playlist: { folderId: string };
   Player: { audio: DownloadedAudio };
 };
 
 // App state types
 export interface AppState {
   downloadedAudios: DownloadedAudio[];
+  folders: Folder[];
   isLoading: boolean;
   error: string | null;
 }
@@ -82,14 +120,41 @@ export interface AppError {
 // Storage keys
 export const STORAGE_KEYS = {
   DOWNLOADED_AUDIOS: 'downloaded_audios',
+  FOLDERS: 'folders',
   PLAYER_POSITION: 'player_position',
   SETTINGS: 'settings',
 } as const;
+
+// Search-related types
+export interface SearchRequest {
+  query: string;
+  maxResults?: number;
+  region?: string;
+}
+
+export interface SearchResultItem {
+  videoId: string;
+  title: string;
+  channelTitle: string;
+  duration: string;
+  durationSec: number;
+  thumbnail: string;
+  url: string;
+}
+
+export interface SearchResponse {
+  success: boolean;
+  results: SearchResultItem[];
+  totalResults: number;
+  nextPageToken?: string;
+  error?: string;
+}
 
 // API endpoints
 export const API_ENDPOINTS = {
   CHECK: '/api/check',
   DOWNLOAD: '/api/download',
+  SEARCH: '/api/search',
 } as const;
 
 // File system paths

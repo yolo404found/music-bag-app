@@ -21,13 +21,13 @@ import { useToast } from '../../core/providers/ToastProvider';
 import { useTheme } from '../../core/providers/ThemeProvider';
 import * as PhosphorIcons from 'phosphor-react-native';
 
-type LibraryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Library'>;
+type FoldersScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Library'>;
 
 const { width } = Dimensions.get('window');
 
-const LibraryScreen: React.FC = () => {
-  const navigation = useNavigation<LibraryScreenNavigationProp>();
-  const { theme, themeMode } = useTheme();
+const FoldersScreen: React.FC = () => {
+  const navigation = useNavigation<FoldersScreenNavigationProp>();
+  const { theme } = useTheme();
   const { 
     appState, 
     createFolder,
@@ -131,17 +131,16 @@ const LibraryScreen: React.FC = () => {
     <TouchableOpacity
       activeOpacity={0.8}
       style={[styles.folderCard, { 
-        backgroundColor: `${theme.colors.primary}08`,
-        borderColor: `${theme.colors.primary}20`,
-        borderWidth: 1 
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.border 
       }]}
       onPress={() => handleFolderPress(folder.id)}
       onLongPress={() => handleFolderLongPress(folder)}
     >
       <View style={styles.folderCardContent}>
-        <View style={[styles.folderIconContainer, { backgroundColor: `${theme.colors.primary}20` }]}>
+        <View style={[styles.folderIconContainer, { backgroundColor: theme.colors.card }]}>
           <PhosphorIcons.Folder 
-            size={28} 
+            size={32} 
             color={theme.colors.primary} 
             weight="fill" 
           />
@@ -156,7 +155,7 @@ const LibraryScreen: React.FC = () => {
         
         <View style={styles.folderCardActions}>
           <PhosphorIcons.CaretRight 
-            size={18} 
+            size={20} 
             color={theme.colors.textSecondary} 
             weight="bold" 
           />
@@ -168,18 +167,13 @@ const LibraryScreen: React.FC = () => {
   // Render empty state
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <View style={[styles.emptyStateIconContainer, { backgroundColor: `${theme.colors.primary}15` }]}>
-        <PhosphorIcons.Folder size={48} color={theme.colors.primary} weight="light" />
-      </View>
+      <PhosphorIcons.Folder size={64} color={theme.colors.textSecondary} weight="light" />
       <Text style={[styles.emptyStateTitle, { color: theme.colors.text }]}>No Folders Yet</Text>
       <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
         Create your first folder to organize your audio files
       </Text>
       <TouchableOpacity
-        style={[styles.emptyStateButton, { 
-          backgroundColor: theme.colors.primary,
-          shadowColor: theme.colors.primary 
-        }]}
+        style={[styles.emptyStateButton, { backgroundColor: theme.colors.primary }]}
         onPress={() => setShowCreateFolderModal(true)}
       >
         <PhosphorIcons.Plus size={20} color="#fff" weight="bold" />
@@ -191,7 +185,7 @@ const LibraryScreen: React.FC = () => {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <StatusBar 
-        barStyle={themeMode === 'light' ? 'dark-content' : 'light-content'} 
+        barStyle={theme.mode === 'light' ? 'dark-content' : 'light-content'} 
         backgroundColor={theme.colors.background} 
       />
       
@@ -419,26 +413,27 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   folderCard: {
-    borderRadius: 16,
-    marginBottom: 16,
-    padding: 20,
+    borderRadius: 12,
+    marginBottom: 12,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 1,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+    borderWidth: 1,
   },
   folderCardContent: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   folderIconContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -453,7 +448,7 @@ const styles = StyleSheet.create({
   },
   folderCardCount: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '400',
   },
   folderCardActions: {
     marginLeft: 12,
@@ -464,40 +459,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 60,
   },
-  emptyStateIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
   emptyStateTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: '600',
+    marginTop: 16,
     marginBottom: 8,
   },
   emptyStateText: {
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
     lineHeight: 22,
-    paddingHorizontal: 20,
   },
   emptyStateButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 28,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 25,
     gap: 8,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
   emptyStateButtonText: {
     color: '#fff',
@@ -559,7 +539,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonPrimary: {
-    // backgroundColor will be set via darkTheme
+    // backgroundColor will be set via theme
   },
   modalButtonText: {
     fontSize: 16,
@@ -581,4 +561,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default LibraryScreen;
+export default FoldersScreen;

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { AppState, DownloadedAudio, PlayerState, AppError } from '../../shared/types';
+import { AppState, DownloadedAudio, PlayerState, AppError, Folder } from '../../shared/types';
 import { storageService } from '../../shared/services/storageService';
 import { AudioProvider } from './AudioProvider';
 import { ToastProvider } from './ToastProvider';
@@ -12,6 +12,10 @@ type AppAction =
   | { type: 'ADD_DOWNLOADED_AUDIO'; payload: DownloadedAudio }
   | { type: 'UPDATE_DOWNLOADED_AUDIO'; payload: DownloadedAudio }
   | { type: 'REMOVE_DOWNLOADED_AUDIO'; payload: string }
+  | { type: 'SET_FOLDERS'; payload: Folder[] }
+  | { type: 'ADD_FOLDER'; payload: Folder }
+  | { type: 'UPDATE_FOLDER'; payload: Folder }
+  | { type: 'REMOVE_FOLDER'; payload: string }
   | { type: 'CLEAR_ERROR' };
 
 type PlayerAction =
@@ -25,6 +29,7 @@ type PlayerAction =
 // Initial states
 const initialAppState: AppState = {
   downloadedAudios: [],
+  folders: [],
   isLoading: false,
   error: null,
 };
@@ -62,6 +67,25 @@ const appReducer = (state: AppState, action: AppAction): AppState => {
       return {
         ...state,
         downloadedAudios: state.downloadedAudios.filter(audio => audio.id !== action.payload),
+      };
+    case 'SET_FOLDERS':
+      return { ...state, folders: action.payload };
+    case 'ADD_FOLDER':
+      return {
+        ...state,
+        folders: [...state.folders, action.payload],
+      };
+    case 'UPDATE_FOLDER':
+      return {
+        ...state,
+        folders: state.folders.map(folder =>
+          folder.id === action.payload.id ? action.payload : folder
+        ),
+      };
+    case 'REMOVE_FOLDER':
+      return {
+        ...state,
+        folders: state.folders.filter(folder => folder.id !== action.payload),
       };
     case 'CLEAR_ERROR':
       return { ...state, error: null };
@@ -102,6 +126,13 @@ interface AppContextType {
   removeDownloadedAudio: (audioId: string) => Promise<void>;
   setError: (error: string | null) => void;
   clearError: () => void;
+  // Folder actions
+  loadFolders: () => Promise<void>;
+  createFolder: (name: string) => Promise<Folder>;
+  updateFolder: (folderId: string, updates: Partial<Folder>) => Promise<void>;
+  deleteFolder: (folderId: string) => Promise<void>;
+  moveAudiosToFolder: (audioIds: string[], targetFolderId: string) => Promise<void>;
+  getAudiosByFolder: (folderId: string) => DownloadedAudio[];
   // Player actions
   playAudio: (audio: DownloadedAudio) => void;
   pauseAudio: () => void;
@@ -122,9 +153,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [appState, dispatch] = useReducer(appReducer, initialAppState);
   const [playerState, playerDispatch] = useReducer(playerReducer, initialPlayerState);
 
-  // Load downloaded audios on app start
+  // Load downloaded audios and folders on app start
   useEffect(() => {
     loadDownloadedAudios();
+    loadFolders();
   }, []);
 
   // App actions
@@ -167,6 +199,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       await storageService.removeDownloadedAudio(audioId);
       dispatch({ type: 'REMOVE_DOWNLOADED_AUDIO', payload: audioId });
+      
+      // Update folder counts after removing audio
+      await storageService.updateFolderAudioCounts();
+      const folders = await storageService.getFolders();
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
     } catch (error) {
       console.error('Error removing downloaded audio:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to remove audio' });
@@ -180,6 +217,89 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const clearError = (): void => {
     dispatch({ type: 'CLEAR_ERROR' });
+  };
+
+  // Folder actions
+  const loadFolders = async (): Promise<void> => {
+    try {
+      const folders = await storageService.getFolders();
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
+      
+      // Initialize default folder if it doesn't exist
+      if (folders.length === 0) {
+        const defaultFolder = await storageService.initializeDefaultFolder();
+        dispatch({ type: 'ADD_FOLDER', payload: defaultFolder });
+      }
+    } catch (error) {
+      console.error('Error loading folders:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to load folders' });
+    }
+  };
+
+  const createFolder = async (name: string): Promise<Folder> => {
+    try {
+      const folder = await storageService.createFolder(name);
+      dispatch({ type: 'ADD_FOLDER', payload: folder });
+      return folder;
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to create folder' });
+      throw error;
+    }
+  };
+
+  const updateFolder = async (folderId: string, updates: Partial<Folder>): Promise<void> => {
+    try {
+      await storageService.updateFolder(folderId, updates);
+      const folders = await storageService.getFolders();
+      const updatedFolder = folders.find(f => f.id === folderId);
+      if (updatedFolder) {
+        dispatch({ type: 'UPDATE_FOLDER', payload: updatedFolder });
+      }
+    } catch (error) {
+      console.error('Error updating folder:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to update folder' });
+      throw error;
+    }
+  };
+
+  const deleteFolder = async (folderId: string): Promise<void> => {
+    try {
+      await storageService.deleteFolder(folderId);
+      dispatch({ type: 'REMOVE_FOLDER', payload: folderId });
+      
+      // Reload audios to reflect the folder changes
+      await loadDownloadedAudios();
+    } catch (error) {
+      console.error('Error deleting folder:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to delete folder' });
+      throw error;
+    }
+  };
+
+  const moveAudiosToFolder = async (audioIds: string[], targetFolderId: string): Promise<void> => {
+    try {
+      await storageService.moveAudiosToFolder(audioIds, targetFolderId);
+      
+      // Update the audios in state
+      const updatedAudios = appState.downloadedAudios.map(audio =>
+        audioIds.includes(audio.id) ? { ...audio, folderId: targetFolderId } : audio
+      );
+      dispatch({ type: 'SET_DOWNLOADED_AUDIOS', payload: updatedAudios });
+      
+      // Update folder counts
+      await storageService.updateFolderAudioCounts();
+      const folders = await storageService.getFolders();
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
+    } catch (error) {
+      console.error('Error moving audios to folder:', error);
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to move audios' });
+      throw error;
+    }
+  };
+
+  const getAudiosByFolder = (folderId: string): DownloadedAudio[] => {
+    return appState.downloadedAudios.filter(audio => audio.folderId === folderId);
   };
 
   // Player actions
@@ -216,6 +336,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     removeDownloadedAudio,
     setError,
     clearError,
+    loadFolders,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    moveAudiosToFolder,
+    getAudiosByFolder,
     playAudio,
     pauseAudio,
     resumeAudio,
