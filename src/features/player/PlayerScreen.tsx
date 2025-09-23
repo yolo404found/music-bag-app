@@ -27,12 +27,18 @@ import * as PhosphorIcons from 'phosphor-react-native';
 type PlayerScreenRouteProp = RouteProp<RootStackParamList, 'Player'>;
 type PlayerScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Player'>;
 
-const { width, height } = Dimensions.get('window');
+interface PlayerScreenParams {
+  audio: DownloadedAudio;
+  playlist?: DownloadedAudio[];
+  playlistIndex?: number;
+}
+
+const { width } = Dimensions.get('window');
 
 const PlayerScreen: React.FC = () => {
   const route = useRoute<PlayerScreenRouteProp>();
   const navigation = useNavigation<PlayerScreenNavigationProp>();
-  const { audio } = route.params;
+  const { audio, playlist: navigationPlaylist, playlistIndex } = route.params as PlayerScreenParams;
   console.log('audio', audio);
   
   const { updateDownloadedAudio, appState } = useApp();
@@ -44,6 +50,7 @@ const PlayerScreen: React.FC = () => {
     isBuffering: globalIsBuffering,
     sound: globalSound,
     playAudio: globalPlayAudio,
+    playPlaylist: globalPlayPlaylist,
     pauseAudio: globalPauseAudio,
     resumeAudio: globalResumeAudio,
     stopAudio: globalStopAudio,
@@ -55,15 +62,17 @@ const PlayerScreen: React.FC = () => {
     playNext: globalPlayNext,
     playPrevious: globalPlayPrevious,
     isAutoPlayEnabled: globalIsAutoPlayEnabled,
-    toggleAutoPlay: globalToggleAutoPlay
+    toggleAutoPlay: globalToggleAutoPlay,
+    isShuffled: globalIsShuffled,
+    isRepeating: globalIsRepeating,
+    toggleShuffle: globalToggleShuffle,
+    toggleRepeat: globalToggleRepeat
   } = useAudio();
   const { theme, themeMode } = useTheme();
   
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  // Remove local sound state to avoid conflicts with global audio provider
   const [isLoading, setIsLoading] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
-  const [isShuffled, setIsShuffled] = useState(false);
-  const [isRepeating, setIsRepeating] = useState(false);
   const [isFavorite, setIsFavorite] = useState(audio.favorite);
   const [volume, setVolume] = useState(1.0);
   const [isMuted, setIsMuted] = useState(false);
@@ -95,17 +104,24 @@ const PlayerScreen: React.FC = () => {
     };
   }, []);
 
-  // Debug: Track sound object changes
+  // Retry initialization when app state changes
   useEffect(() => {
-    console.log('🎵 Sound object changed:', {
-      localSound: !!sound,
-      globalSound: !!globalSound,
-      isLoading,
-      globalIsBuffering,
-      globalIsPlaying,
-      disabled: !globalSound || isLoading || globalIsBuffering
-    });
-  }, [sound, globalSound, isLoading, globalIsBuffering, globalIsPlaying]);
+    if (appState.downloadedAudios.length > 0 && playlist.length === 0) {
+      console.log('🎵 PlayerScreen - Retrying playlist initialization');
+      initializePlaylist();
+    }
+  }, [appState.downloadedAudios.length]);
+
+  // Debug: Track sound object changes
+  // useEffect(() => {
+  //   console.log('🎵 Sound object changed:', {
+  //     globalSound: !!globalSound,
+  //     isLoading,
+  //     globalIsBuffering,
+  //     globalIsPlaying,
+  //     disabled: !globalSound || isLoading || globalIsBuffering
+  //   });
+  // }, [globalSound, isLoading, globalIsBuffering, globalIsPlaying]);
 
   // Sync local currentAudio with global currentAudio changes
   useEffect(() => {
@@ -121,6 +137,22 @@ const PlayerScreen: React.FC = () => {
       }
     }
   }, [globalCurrentAudio, currentAudio.id, playlist]);
+
+  // Sync local playlist with global playlist changes
+  useEffect(() => {
+    console.log('🎵 PlayerScreen - Global playlist changed, length:', globalPlaylist.length);
+    console.log('🎵 PlayerScreen - Global playlist contents:', globalPlaylist.map(a => a.title));
+    if (globalPlaylist.length > 0 && globalPlaylist.length !== playlist.length) {
+      console.log('🎵 PlayerScreen - Updating local playlist to match global playlist');
+      setPlaylist(globalPlaylist);
+      
+      // Update current track index
+      const newIndex = globalPlaylist.findIndex(a => a.id === currentAudio.id);
+      if (newIndex >= 0) {
+        setCurrentTrackIndex(newIndex);
+      }
+    }
+  }, [globalPlaylist, currentAudio.id]);
 
   // Initialize visualization bars
   const initializeVisualization = (): void => {
@@ -174,40 +206,39 @@ const PlayerScreen: React.FC = () => {
     }
   };
 
-  // Fallback position update for progress bar
-  useEffect(() => {
-    if (globalIsPlaying && sound) {
-      positionUpdateInterval.current = setInterval(() => {
-        if (sound && !isSeeking) {
-          sound.getStatusAsync().then((status: any) => {
-            if (status.isLoaded && status.positionMillis !== undefined) {
-              const newPosition = status.positionMillis / 1000;
-              console.log('🎵 Fallback position update:', newPosition);
-            }
-          });
-        }
-      }, 1000); // Update every second
-    } else {
-      if (positionUpdateInterval.current) {
-        clearInterval(positionUpdateInterval.current);
-      }
-    }
-
-    return () => {
-      if (positionUpdateInterval.current) {
-        clearInterval(positionUpdateInterval.current);
-      }
-    };
-  }, [globalIsPlaying, sound, isSeeking]);
-
   // Initialize playlist and find current track
   const initializePlaylist = (): void => {
-    const allAudios = appState.downloadedAudios;
+    // Use the playlist from navigation params if available, otherwise use all downloaded audios
+    const allAudios = navigationPlaylist && navigationPlaylist.length > 0 
+      ? navigationPlaylist 
+      : appState.downloadedAudios;
+      
+    console.log('🎵 PlayerScreen - Initializing playlist with', allAudios.length, 'tracks');
+    console.log('🎵 PlayerScreen - Navigation playlist provided:', !!navigationPlaylist, 'length:', navigationPlaylist?.length || 0);
+    console.log('🎵 PlayerScreen - App state downloaded audios length:', appState.downloadedAudios.length);
+    if (allAudios.length > 0) {
+      console.log('🎵 PlayerScreen - Playlist contents:', allAudios.map(a => a.title));
+    } else {
+      console.log('🎵 PlayerScreen - Playlist is empty');
+      console.log('🎵 PlayerScreen - App state isLoading:', appState.isLoading);
+      if (appState.isLoading) {
+        console.log('🎵 PlayerScreen - Still loading audios, will retry when loaded');
+        return;
+      } else {
+        console.trace('Empty playlist initialized in PlayerScreen:');
+      }
+    }
     setPlaylist(allAudios);
     
     // Find current track index
     const currentIndex = allAudios.findIndex(a => a.id === currentAudio.id);
+    console.log('🎵 PlayerScreen - Current audio index:', currentIndex, 'in playlist of length', allAudios.length);
     setCurrentTrackIndex(currentIndex >= 0 ? currentIndex : 0);
+    
+    // Always set the global playlist to ensure it's not empty
+    // This fixes the issue where the playlist gets reset to empty
+    console.log('🎵 PlayerScreen - Setting global playlist with', allAudios.length, 'tracks at index', currentIndex);
+    globalSetPlaylist(allAudios, currentIndex >= 0 ? currentIndex : 0);
   };
 
   // Change current audio and update UI
@@ -222,8 +253,8 @@ const PlayerScreen: React.FC = () => {
       // Update global audio state
       setGlobalCurrentAudio(newAudio);
       
-      // Play the new audio
-      await globalPlayAudio(newAudio);
+      // Play the new audio with playlist context
+      await globalPlayAudio(newAudio, playlist);
       
       console.log('🎵 Audio changed successfully');
     } catch (error) {
@@ -242,156 +273,6 @@ const PlayerScreen: React.FC = () => {
     }
   };
 
-  // Load and prepare audio
-  const loadAudio = async (): Promise<void> => {
-    try {
-      console.log('🎵 Starting audio load process...');
-      setIsLoading(true);
-      console.log('🎵 Loading audio from:', currentAudio.localUri);
-      console.log('🎵 Audio metadata:', {
-        id: currentAudio.id,
-        title: currentAudio.title,
-        duration: currentAudio.duration,
-        fileSize: currentAudio.fileSize
-      });
-      
-      // Configure audio session for playback
-      console.log('🎵 Configuring audio session...');
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-      console.log('🎵 Audio session configured');
-      
-      // Unload previous sound
-      if (sound) {
-        console.log('🎵 Unloading previous sound object...');
-        await sound.unloadAsync();
-        console.log('🎵 Previous sound unloaded');
-      }
-
-      // Check if file exists
-      console.log('🎵 Checking if audio file exists...');
-      const fileInfo = await FileSystem.getInfoAsync(currentAudio.localUri);
-      console.log('🎵 File info:', {
-        exists: fileInfo.exists,
-        size: 'size' in fileInfo ? fileInfo.size : 'unknown',
-        uri: fileInfo.uri,
-        isDirectory: fileInfo.isDirectory
-      });
-
-      if (!fileInfo.exists) {
-        throw new Error(`Audio file does not exist at: ${currentAudio.localUri}`);
-      }
-
-      if ('size' in fileInfo && fileInfo.size === 0) {
-        throw new Error('Audio file is empty (0 bytes)');
-      }
-
-      console.log('🎵 Audio file exists, size:', 'size' in fileInfo ? fileInfo.size : 'unknown');
-
-      // Load new sound
-      console.log('🎵 Creating Audio.Sound object...');
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: currentAudio.localUri },
-        { 
-          shouldPlay: false, 
-          positionMillis: globalPosition * 1000,
-          isLooping: false,
-          volume: 1.0,
-          isMuted: false,
-        },
-        onPlaybackStatusUpdate
-      );
-
-      console.log('🎵 Audio.Sound object created successfully');
-      setSound(newSound);
-      setIsLoading(false);
-      console.log('🎵 Audio loaded successfully - ready to play!');
-      
-      // Auto-play if this was triggered by play button
-      if (!globalIsPlaying) {
-        try {
-          await newSound.setVolumeAsync(volume);
-          await newSound.setIsMutedAsync(isMuted);
-          await newSound.playAsync();
-          console.log('🎵 Auto-playing after load');
-        } catch (error) {
-          console.error('🎵 Error auto-playing after load:', error);
-        }
-      }
-    } catch (error) {
-      console.error('🎵 Error loading audio:', error);
-      console.error('🎵 Error details:', {
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined,
-        audioUri: currentAudio.localUri
-      });
-      setIsLoading(false);
-      Alert.alert('Error', `Failed to load audio file: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  };
-
-  // Playback status update handler
-  const onPlaybackStatusUpdate = async (status: any): Promise<void> => {
-    console.log('🎵 Playback status update:', {
-      isLoaded: status.isLoaded,
-      isPlaying: status.isPlaying,
-      isBuffering: status.isBuffering,
-      positionMillis: status.positionMillis,
-      durationMillis: status.durationMillis,
-      error: status.error,
-      volume: status.volume,
-      isMuted: status.isMuted,
-      shouldPlay: status.shouldPlay,
-      didJustFinish: status.didJustFinish
-    });
-
-    if (status.isLoaded) {
-      console.log('🎵 Status updated:', {
-        position: status.positionMillis / 1000,
-        duration: status.durationMillis / 1000,
-        isPlaying: status.isPlaying,
-        isBuffering: status.isBuffering,
-        volume: status.volume,
-        isMuted: status.isMuted,
-        shouldPlay: status.shouldPlay
-      });
-      
-      // Check if audio is actually playing
-      if (status.isPlaying) {
-        console.log('🎵 AUDIO IS PLAYING - Position:', status.positionMillis / 1000, 'Duration:', status.durationMillis / 1000);
-      } else if (status.shouldPlay && !status.isPlaying) {
-        console.log('🎵 WARNING - Audio should be playing but is not!');
-      }
-      
-      // Handle track completion
-      if (status.didJustFinish) {
-        console.log('🎵 Track finished, moving to next track');
-        if (isRepeating) {
-          // Restart current track
-          if (sound) {
-            await sound.setPositionAsync(0);
-            await sound.playAsync();
-          }
-        } else {
-          // Go to next track
-          handleNext();
-        }
-      }
-      
-      // Save position every 5 seconds
-      if (status.positionMillis % 5000 < 100) {
-        savePosition(status.positionMillis / 1000);
-      }
-    } else if (status.error) {
-      console.error('🎵 Playback error:', status.error);
-    }
-  };
-
   // Save position
   const savePosition = async (pos: number): Promise<void> => {
     try {
@@ -401,36 +282,34 @@ const PlayerScreen: React.FC = () => {
     }
   };
 
-  // Handle play/pause
+  // Handle play/pause - play only current audio, not global playlist
   const handlePlayPause = async (): Promise<void> => {
     console.log('🎵 Play button clicked!');
     console.log('🎵 Current state:', { 
       globalIsPlaying,
       isLoading, 
       globalIsBuffering,
-      localSound: !!sound,
       globalSound: !!globalSound,
-      audioUri: currentAudio.localUri 
+      audioUri: currentAudio.localUri,
+      playlistLength: playlist.length
     });
 
     try {
       if (globalIsPlaying) {
         console.log('🎵 Pausing audio...');
         await globalPauseAudio();
-        // stopVisualization();
         console.log('🎵 Audio paused successfully');
       } else {
         // Check if this is the same audio that was paused
-        if (globalCurrentAudio && globalCurrentAudio.id === currentAudio.id && globalSound) {
+        if (globalCurrentAudio && globalCurrentAudio.id === currentAudio.id) {
           console.log('🎵 Resuming paused audio...');
           await globalResumeAudio();
-          // startVisualization();
           console.log('🎵 Audio resumed successfully');
         } else {
-          console.log('🎵 Playing new audio...');
-          await globalPlayAudio(currentAudio);
-          // startVisualization();
-          console.log('🎵 Audio play command sent');
+          console.log('🎵 Playing single audio with playlist context...');
+          // Play the current audio with the current playlist as context
+          await globalPlayAudio(currentAudio, playlist);
+          console.log('🎵 Single audio play command sent with playlist context');
         }
       }
     } catch (error) {
@@ -446,14 +325,7 @@ const PlayerScreen: React.FC = () => {
   const handleVolumeChange = async (newVolume: number): Promise<void> => {
     console.log('🎵 Volume changed to:', newVolume);
     setVolume(newVolume);
-    if (sound) {
-      try {
-        await sound.setVolumeAsync(newVolume);
-        console.log('🎵 Volume set successfully');
-      } catch (error) {
-        console.error('🎵 Error setting volume:', error);
-      }
-    }
+    // Volume is now handled by the global audio provider
   };
 
   // Handle mute toggle
@@ -461,14 +333,7 @@ const PlayerScreen: React.FC = () => {
     const newMuted = !isMuted;
     console.log('🎵 Mute toggled to:', newMuted);
     setIsMuted(newMuted);
-    if (sound) {
-      try {
-        await sound.setIsMutedAsync(newMuted);
-        console.log('🎵 Mute set successfully');
-      } catch (error) {
-        console.error('🎵 Error setting mute:', error);
-      }
-    }
+    // Mute is now handled by the global audio provider
   };
 
   // Handle seek start (when user starts dragging)
@@ -517,14 +382,8 @@ const PlayerScreen: React.FC = () => {
 
   // Handle playback rate change
   const handlePlaybackRateChange = async (rate: number): Promise<void> => {
-    if (!sound) return;
-
-    try {
-      await sound.setRateAsync(rate, true);
-      setPlaybackRate(rate);
-    } catch (error) {
-      console.error('Error changing playback rate:', error);
-    }
+    setPlaybackRate(rate);
+    // Playback rate is now handled by the global audio provider
   };
 
   // Handle favorite toggle
@@ -541,36 +400,12 @@ const PlayerScreen: React.FC = () => {
 
   // Handle shuffle toggle
   const handleShuffleToggle = (): void => {
-    const newShuffled = !isShuffled;
-    setIsShuffled(newShuffled);
-    
-    if (newShuffled && playlist.length > 1) {
-      // Shuffle the playlist
-      const shuffledPlaylist = [...playlist];
-      const currentTrack = shuffledPlaylist[currentTrackIndex];
-      
-      // Remove current track from shuffle
-      shuffledPlaylist.splice(currentTrackIndex, 1);
-      
-      // Shuffle the rest
-      for (let i = shuffledPlaylist.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledPlaylist[i], shuffledPlaylist[j]] = [shuffledPlaylist[j], shuffledPlaylist[i]];
-      }
-      
-      // Put current track at the beginning
-      shuffledPlaylist.unshift(currentTrack);
-      setPlaylist(shuffledPlaylist);
-      setCurrentTrackIndex(0);
-    } else if (!newShuffled) {
-      // Restore original order
-      initializePlaylist();
-    }
+    globalToggleShuffle();
   };
 
   // Handle repeat toggle
   const handleRepeatToggle = (): void => {
-    setIsRepeating(!isRepeating);
+    globalToggleRepeat();
   };
 
   // Handle previous track
@@ -597,21 +432,6 @@ const PlayerScreen: React.FC = () => {
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (positionUpdateInterval.current) {
-        clearInterval(positionUpdateInterval.current);
-      }
-      if (seekTimeoutRef.current) {
-        clearTimeout(seekTimeoutRef.current);
-      }
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -750,7 +570,7 @@ const PlayerScreen: React.FC = () => {
         >
           <PhosphorIcons.Shuffle 
             size={26} 
-            color={isShuffled ? theme.colors.primary : theme.colors.textSecondary} 
+            color={globalIsShuffled ? theme.colors.primary : theme.colors.textSecondary} 
             weight="bold" 
           />
         </TouchableOpacity>
@@ -805,21 +625,10 @@ const PlayerScreen: React.FC = () => {
         >
           <PhosphorIcons.Repeat 
             size={26} 
-            color={isRepeating ? theme.colors.primary : theme.colors.textSecondary} 
+            color={globalIsRepeating ? theme.colors.primary : theme.colors.textSecondary} 
             weight="bold" 
           />
         </TouchableOpacity>
-        
-        {/* <TouchableOpacity 
-          style={styles.controlButton}
-          onPress={globalToggleAutoPlay}
-        >
-          <PhosphorIcons.PlayCircle 
-            size={20} 
-            color={globalIsAutoPlayEnabled ? theme.colors.primary : theme.colors.textSecondary} 
-            weight="bold" 
-          />
-        </TouchableOpacity> */}
       </View>
 
         {/* Action Buttons */}
@@ -843,7 +652,7 @@ const PlayerScreen: React.FC = () => {
         <View style={styles.upNextContainer}>
           <View style={styles.upNextHeader}>
             <Text style={[styles.upNextTitle, { color: theme.colors.textSecondary }]}>UP NEXT</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('Library')}>
+            <TouchableOpacity onPress={() => navigation.navigate('Library' as never)}>
               <PhosphorIcons.List size={18} color={theme.colors.textSecondary} weight="bold" />
             </TouchableOpacity>
           </View>
@@ -857,10 +666,9 @@ const PlayerScreen: React.FC = () => {
                 }]}
                 onPress={async () => {
                   try {
+                    // Play the current global playlist from the selected track
                     const newIndex = globalCurrentIndex + index + 1;
-                    // Set playlist with new index and play the audio
-                    globalSetPlaylist(globalPlaylist, newIndex);
-                    await globalPlayAudio(item);
+                    await globalPlayPlaylist(globalPlaylist, newIndex);
                   } catch (error) {
                     console.error('Error playing selected audio:', error);
                   }

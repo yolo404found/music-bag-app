@@ -165,6 +165,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       dispatch({ type: 'SET_LOADING', payload: true });
       const audios = await storageService.getDownloadedAudios();
       dispatch({ type: 'SET_DOWNLOADED_AUDIOS', payload: audios });
+      
+      // Update folder counts to ensure they're accurate
+      await storageService.updateFolderAudioCounts();
+      const folders = await storageService.getFolders();
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
     } catch (error) {
       console.error('Error loading downloaded audios:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load library' });
@@ -177,6 +182,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       await storageService.saveDownloadedAudio(audio);
       dispatch({ type: 'ADD_DOWNLOADED_AUDIO', payload: audio });
+      
+      // Update folder counts after adding audio
+      await storageService.updateFolderAudioCounts();
+      const folders = await storageService.getFolders();
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
     } catch (error) {
       console.error('Error adding downloaded audio:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to save audio' });
@@ -188,6 +198,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       await storageService.saveDownloadedAudio(audio);
       dispatch({ type: 'UPDATE_DOWNLOADED_AUDIO', payload: audio });
+      
+      // Update folder counts after updating audio
+      await storageService.updateFolderAudioCounts();
+      const folders = await storageService.getFolders();
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
     } catch (error) {
       console.error('Error updating downloaded audio:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to update audio' });
@@ -222,7 +237,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // Folder actions
   const loadFolders = async (): Promise<void> => {
     try {
+      // First update folder counts to ensure they're accurate
+      await storageService.updateFolderAudioCounts();
+      
       const folders = await storageService.getFolders();
+      console.log('Loaded folders:', folders);
       dispatch({ type: 'SET_FOLDERS', payload: folders });
       
       // Initialize default folder if it doesn't exist
@@ -240,6 +259,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     try {
       const folder = await storageService.createFolder(name);
       dispatch({ type: 'ADD_FOLDER', payload: folder });
+      
+      // Update folder counts to ensure accuracy
+      await storageService.updateFolderAudioCounts();
+      const folders = await storageService.getFolders();
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
+      
       return folder;
     } catch (error) {
       console.error('Error creating folder:', error);
@@ -251,11 +276,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const updateFolder = async (folderId: string, updates: Partial<Folder>): Promise<void> => {
     try {
       await storageService.updateFolder(folderId, updates);
+      
+      // Update folder counts to ensure accuracy
+      await storageService.updateFolderAudioCounts();
       const folders = await storageService.getFolders();
-      const updatedFolder = folders.find(f => f.id === folderId);
-      if (updatedFolder) {
-        dispatch({ type: 'UPDATE_FOLDER', payload: updatedFolder });
-      }
+      dispatch({ type: 'SET_FOLDERS', payload: folders });
     } catch (error) {
       console.error('Error updating folder:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to update folder' });
@@ -268,8 +293,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       await storageService.deleteFolder(folderId);
       dispatch({ type: 'REMOVE_FOLDER', payload: folderId });
       
-      // Reload audios to reflect the folder changes
+      // Reload audios and folders to reflect the changes
       await loadDownloadedAudios();
+      await loadFolders();
     } catch (error) {
       console.error('Error deleting folder:', error);
       dispatch({ type: 'SET_ERROR', payload: 'Failed to delete folder' });

@@ -254,14 +254,45 @@ class StorageService {
         console.log('✅ Duplicate audios removed from storage');
       }
       
-      const updatedFolders = folders.map(folder => {
-        const folderAudios = audios.filter(audio => audio.folderId === folder.id);
-        
-        return {
-          ...folder,
-          audioCount: folderAudios.length,
-        };
+      // Count audios for each folder
+      const folderAudioCounts: Record<string, number> = {};
+      
+      // Initialize counts for all folders
+      folders.forEach(folder => {
+        folderAudioCounts[folder.id] = 0;
       });
+      
+      // Count audios for each folder
+      audios.forEach(audio => {
+        if (audio.folderId && folderAudioCounts.hasOwnProperty(audio.folderId)) {
+          folderAudioCounts[audio.folderId]++;
+        } else {
+          // Audio doesn't belong to any valid folder, assign to default
+          const defaultFolder = folders.find(f => f.isDefault);
+          if (defaultFolder) {
+            folderAudioCounts[defaultFolder.id]++;
+            // Update the audio's folderId to default
+            audio.folderId = defaultFolder.id;
+          }
+        }
+      });
+      
+      // If we had to reassign orphaned audios, save the updated audios
+      const orphanedAudios = audios.filter(audio => {
+        const defaultFolder = folders.find(f => f.isDefault);
+        return !folders.some(f => f.id === audio.folderId) && defaultFolder;
+      });
+      
+      if (orphanedAudios.length > 0) {
+        await AsyncStorage.setItem(STORAGE_KEYS.DOWNLOADED_AUDIOS, JSON.stringify(audios));
+        console.log(`Reassigned ${orphanedAudios.length} orphaned audios to default folder`);
+      }
+      
+      // Update folder audio counts
+      const updatedFolders = folders.map(folder => ({
+        ...folder,
+        audioCount: folderAudioCounts[folder.id] || 0,
+      }));
       
       await this.saveFolders(updatedFolders);
     } catch (error) {

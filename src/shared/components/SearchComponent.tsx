@@ -111,6 +111,7 @@ const SearchComponent: React.FC<SearchComponentProps> = ({
 
   const renderSearchResult = ({ item }: { item: SearchResultItem }) => (
     <TouchableOpacity
+      activeOpacity={.8}
       style={[styles.resultItem, { 
         backgroundColor: theme.colors.card,
         borderColor: theme.colors.border 
@@ -138,7 +139,14 @@ const SearchComponent: React.FC<SearchComponentProps> = ({
   );
 
   const renderEmptyState = () => {
-    if (isSearching) return null;
+    if (isSearching) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Text style={[styles.loadingText, { color: theme.colors.text }]}>Searching...</Text>
+        </View>
+      );
+    }
     
     if (!hasSearched) {
       return (
@@ -212,7 +220,11 @@ const SearchComponent: React.FC<SearchComponentProps> = ({
         onPress={handleSearch}
         disabled={!query.trim() || isSearching}
       >
-        <Text style={styles.searchButtonText}>Search</Text>
+        {isSearching ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Text style={styles.searchButtonText}>Search</Text>
+        )}
       </TouchableOpacity>
 
       {/* Results */}
@@ -327,6 +339,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 16,
   },
 });
 

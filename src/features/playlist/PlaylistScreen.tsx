@@ -232,12 +232,26 @@ const PlaylistScreen: React.FC = () => {
         const currentPlaylist = filteredAudios;
         const audioIndex = currentPlaylist.findIndex(a => a.id === audio.id);
         
-        // Set playlist with current audio index
+        console.log('🎵 PlaylistScreen - Playing audio with playlist context:', {
+          audioTitle: audio.title,
+          playlistLength: currentPlaylist.length,
+          audioIndex: audioIndex
+        });
+        
+        if (currentPlaylist.length > 0) {
+          console.log('🎵 PlaylistScreen - Playlist contents:', currentPlaylist.map(a => a.title));
+        } else {
+          console.log('🎵 PlaylistScreen - Playlist is empty');
+          console.trace('Empty playlist in PlaylistScreen:');
+        }
+        
+        // IMPORTANT: Set the current playlist and index globally BEFORE playing
         globalSetPlaylist(currentPlaylist, audioIndex);
         
-        // Play the selected audio
-        await globalPlayAudio(audio);
-        navigation.navigate('Player', { audio });
+        // Play the selected audio with playlist context
+        await globalPlayAudio(audio, currentPlaylist, audioIndex);
+        // Pass the playlist information to the PlayerScreen
+        navigation.navigate('Player', { audio, playlist: currentPlaylist, playlistIndex: audioIndex });
       }
     } catch (error) {
       console.error('Error playing audio:', error);
@@ -478,7 +492,7 @@ const PlaylistScreen: React.FC = () => {
       {/* Multi-select toolbar */}
       {isMultiSelectMode && (
         <View style={[styles.multiSelectToolbar, { 
-          backgroundColor: theme.colors.surface,
+          // backgroundColor: theme.colors.surface,
           borderBottomColor: theme.colors.border 
         }]}>
           <Text style={[styles.multiSelectText, { color: theme.colors.primary }]}>
@@ -574,7 +588,7 @@ const PlaylistScreen: React.FC = () => {
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { 
-            backgroundColor: theme.colors.card,
+            backgroundColor: theme.colors.background,
             borderColor: theme.colors.border 
           }]}>
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>Move to Folder</Text>
@@ -643,6 +657,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingVertical: 12,
+    marginTop: 8,
     // backgroundColor and borderBottomColor will be set dynamically via theme
     borderBottomWidth: 1,
   },

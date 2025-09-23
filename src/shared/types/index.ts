@@ -82,7 +82,7 @@ export type RootStackParamList = {
   Info: { metadata: AudioMetadata };
   Library: undefined;
   Playlist: { folderId: string };
-  Player: { audio: DownloadedAudio };
+  Player: { audio: DownloadedAudio; playlist?: DownloadedAudio[]; playlistIndex?: number };
 };
 
 // App state types

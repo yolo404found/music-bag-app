@@ -142,7 +142,7 @@ const MiniPlayer: React.FC = () => {
 
   // Don't render if no audio is playing or if we're on the Player screen
   if (!currentAudio || currentScreen === 'Player') {
-    console.log('🎵 MiniPlayer - Not rendering because:', !currentAudio ? 'no audio' : 'on Player screen');
+    // console.log('🎵 MiniPlayer - Not rendering because:', !currentAudio ? 'no audio' : 'on Player screen');
     return null;
   }
 

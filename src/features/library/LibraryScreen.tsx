@@ -420,8 +420,8 @@ const styles = StyleSheet.create({
   },
   folderCard: {
     borderRadius: 16,
-    marginBottom: 16,
-    padding: 20,
+    marginBottom: 12,
+    padding: 16,
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
